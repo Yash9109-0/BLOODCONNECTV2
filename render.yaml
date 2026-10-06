@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: blood-connect
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: AI_PROVIDER
+        value: auto
+      - key: OPENROUTER_MODEL
+        value: google/gemini-2.0-flash-exp:free
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        value: https://fyqeuamxgtjgjzutvvhm.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5cWV1YW14Z3RqZ2p6dXR2dmhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NTgyMTUsImV4cCI6MjEwNjMzNDIxNX0.Oi2ddnJmY1MC_-gp73o9fw3Ew9TVVqYJf_lFqIwhIW8

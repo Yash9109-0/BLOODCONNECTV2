@@ -1,0 +1,6 @@
+{
+  "name": "Blood-Connect",
+  "description": "Real-time National Lifeline Network connecting hospital blood banks, emergency ICU wards, and gamified voluntary donors with AI-powered WhatsApp broadcasts and clinical health bot.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

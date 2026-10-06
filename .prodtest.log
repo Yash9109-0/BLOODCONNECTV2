@@ -1,0 +1,11 @@
+◇ injected env (8) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+✅ Connected to Supabase Project: https://fyqeuamxgtjgjzutvvhm.supabase.co
+🔄 Fetching complete dataset from Supabase...
+⚠️ GEMINI_API_KEY not defined. OpenRouter or local zero-cost clinical engine active.
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vite.config.ts:11:27). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+[31mWebSocket server error: Port 24678 is already in use[39m
+🚀 Blood-Connect Server running on http://0.0.0.0:8123
+✅ Loaded 20 blood banks with real GPS coordinates from Supabase
+✅ Loaded 1000 donors with real localities & GPS locations from Supabase
