@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserRole, BloodGroup } from '../types';
 import { supabase } from '../lib/supabase';
-import { signIn, signUp, signInWithGoogle, getUserRole, getUserDisplayName } from '../lib/auth';
+import { signIn, signUp, signInWithGoogle, getUserRole, getUserDisplayName, DEMO_CREDENTIALS } from '../lib/auth';
 
 interface AuthScreenProps {
   activeRole: UserRole;
@@ -98,6 +98,32 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     setActiveRole(newRole);
     setAuthError(null);
     setAuthFeedback(null);
+  };
+
+  const handleQuickDemoLogin = async (role: UserRole) => {
+    const cred = DEMO_CREDENTIALS[role as keyof typeof DEMO_CREDENTIALS] || DEMO_CREDENTIALS.donor;
+    setEmail(cred.email);
+    setPassword(cred.password);
+    setActiveRole(cred.role);
+    setAuthMode('signin');
+    setAuthError(null);
+    setAuthFeedback(`Logging in as Demo ${cred.name}...`);
+    setIsAuthenticating(true);
+
+    try {
+      const result = await signIn(cred.email, cred.password);
+      if (result.success && result.user) {
+        onLoginSuccess(cred.role, {
+          email: cred.email,
+          name: cred.name,
+          facilityName: (cred as any).facilityName || '',
+        });
+      } else if (!result.success) {
+        setAuthError(result.error);
+      }
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -328,6 +354,80 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             <p className="text-[14px] text-slate-600 leading-snug">
               Connecting verified voluntary donors, regional blood banks & critical ICU wards in real-time.
             </p>
+          </div>
+
+          {/* Presentation Mode: 1-Click Quick Demo Access */}
+          <div className="mt-2 mb-4 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-red-50 via-amber-50/60 to-indigo-50 border border-red-200/90 shadow-xs flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-[12px] font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <span>⚡ Presentation Mode: 1-Click Demo Login</span>
+                </span>
+              </div>
+              <span className="text-[10px] font-mono font-bold text-slate-600 bg-white/90 px-2 py-0.5 rounded-full border border-slate-200 shadow-2xs">
+                Pass: <span className="text-[#b70011]">demo123</span>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {/* Demo Donor Button */}
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('donor')}
+                className="p-2.5 rounded-xl bg-white hover:bg-red-50/80 border border-red-200 hover:border-red-300 text-left transition-all shadow-2xs flex flex-col gap-0.5 group active:scale-[0.98]"
+                title="Login as Rahul Sharma (Voluntary Donor, O+)"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-[#b70011] flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">favorite</span>
+                    <span>Voluntary Donor</span>
+                  </span>
+                  <span className="text-[9px] font-bold bg-red-100 text-red-800 px-1.5 py-0.2 rounded-full">1-Click</span>
+                </div>
+                <p className="text-[10px] font-mono font-semibold text-slate-700 truncate mt-0.5">donor@lifeline.org</p>
+                <p className="text-[9.5px] text-slate-500">Rahul Sharma • Group O+</p>
+              </button>
+
+              {/* Demo Hospital Button */}
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('hospital')}
+                className="p-2.5 rounded-xl bg-white hover:bg-blue-50/80 border border-blue-200 hover:border-blue-300 text-left transition-all shadow-2xs flex flex-col gap-0.5 group active:scale-[0.98]"
+                title="Login as AIIMS Raipur Blood Center (Hospital)"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-blue-700 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">local_hospital</span>
+                    <span>Hospital Center</span>
+                  </span>
+                  <span className="text-[9px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded-full">1-Click</span>
+                </div>
+                <p className="text-[10px] font-mono font-semibold text-slate-700 truncate mt-0.5">hospital@lifeline.org</p>
+                <p className="text-[9.5px] text-slate-500">AIIMS Raipur Center</p>
+              </button>
+
+              {/* Demo Super Admin Button */}
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('super_admin')}
+                className="p-2.5 rounded-xl bg-white hover:bg-indigo-50/80 border border-indigo-200 hover:border-indigo-300 text-left transition-all shadow-2xs flex flex-col gap-0.5 group active:scale-[0.98]"
+                title="Login as State Health Authority (Super Admin)"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-indigo-700 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">shield_person</span>
+                    <span>Super Admin</span>
+                  </span>
+                  <span className="text-[9px] font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.2 rounded-full">1-Click</span>
+                </div>
+                <p className="text-[10px] font-mono font-semibold text-slate-700 truncate mt-0.5">admin@lifeline.org</p>
+                <p className="text-[9.5px] text-slate-500">State Health Authority</p>
+              </button>
+            </div>
           </div>
 
       {/* Role Switcher / Segmented Selector */}

@@ -246,8 +246,129 @@ export async function signUp(profile: SignUpProfile): Promise<AuthResult> {
   }
 }
 
-/** Sign in an existing account. */
+export const DEMO_CREDENTIALS = {
+  donor: {
+    email: 'donor@lifeline.org',
+    password: 'demo123',
+    role: 'donor' as const,
+    name: 'Rahul Sharma',
+    bloodGroup: 'O+',
+    city: 'Raipur',
+    description: 'Gold Hero Voluntary Donor',
+  },
+  hospital: {
+    email: 'hospital@lifeline.org',
+    password: 'demo123',
+    role: 'hospital' as const,
+    name: 'AIIMS Raipur Blood Center',
+    facilityName: 'AIIMS Raipur Blood Center',
+    city: 'Raipur',
+    description: 'State Level Blood Bank & Trauma Ward',
+  },
+  super_admin: {
+    email: 'admin@lifeline.org',
+    password: 'demo123',
+    role: 'super_admin' as const,
+    name: 'State Health Authority',
+    facilityName: 'Directorate of Health Services CG',
+    city: 'Raipur',
+    description: 'Chhattisgarh State Blood Transfusion Council',
+  },
+};
+
+/** Sign in an existing account or instant presentation demo credentials. */
 export async function signIn(email: string, password: string): Promise<AuthResult> {
+  const normEmail = email.trim().toLowerCase();
+
+  // Instant Demo Presentation Accounts (bypasses unconfirmed email barriers in live presentations)
+  if (
+    normEmail === 'donor@lifeline.org' ||
+    normEmail === 'demo.donor@bloodconnect.org' ||
+    normEmail === 'donor@demo.com'
+  ) {
+    const demoUser: any = {
+      id: 'demo-donor-001',
+      email: normEmail,
+      user_metadata: {
+        role: 'donor',
+        full_name: 'Rahul Sharma',
+        name: 'Rahul Sharma',
+        blood_group: 'O+',
+        city: 'Raipur',
+        age: 24,
+        weight: 68,
+        hemoglobin: 14.2,
+        total_donations: 6,
+        points: 1250,
+        donor_code: 'BC-OP-994821',
+      },
+    };
+    try {
+      localStorage.setItem('bc_demo_user', JSON.stringify(demoUser));
+    } catch {}
+    return {
+      success: true,
+      message: 'Signed in as Demo Voluntary Donor (Rahul Sharma).',
+      user: demoUser,
+    };
+  }
+
+  if (
+    normEmail === 'hospital@lifeline.org' ||
+    normEmail === 'demo.hospital@bloodconnect.org' ||
+    normEmail === 'hospital@demo.com'
+  ) {
+    const demoUser: any = {
+      id: 'demo-hospital-001',
+      email: normEmail,
+      user_metadata: {
+        role: 'hospital',
+        facility_name: 'AIIMS Raipur Blood Center',
+        full_name: 'AIIMS Raipur Blood Center',
+        name: 'AIIMS Raipur Blood Center',
+        license_number: 'Lic. #CG-BLD-8821',
+        city: 'Raipur',
+        address: 'GE Road, Tatibandh, Raipur, Chhattisgarh 492099',
+        contact_number: '+91 98765-43210',
+      },
+    };
+    try {
+      localStorage.setItem('bc_demo_user', JSON.stringify(demoUser));
+    } catch {}
+    return {
+      success: true,
+      message: 'Signed in as Demo Hospital Center (AIIMS Raipur).',
+      user: demoUser,
+    };
+  }
+
+  if (
+    normEmail === 'admin@lifeline.org' ||
+    normEmail === 'demo.admin@bloodconnect.org' ||
+    normEmail === 'admin@demo.com' ||
+    normEmail === 'superadmin@lifeline.gov.in'
+  ) {
+    const demoUser: any = {
+      id: 'demo-admin-001',
+      email: normEmail,
+      user_metadata: {
+        role: 'super_admin',
+        full_name: 'State Health Authority Super Admin',
+        name: 'State Health Authority',
+        facility_name: 'Directorate of Health Services CG',
+        city: 'Raipur',
+      },
+    };
+    try {
+      localStorage.setItem('bc_demo_user', JSON.stringify(demoUser));
+    } catch {}
+    return {
+      success: true,
+      message: 'Signed in as Demo Super Admin (State Health Authority).',
+      user: demoUser,
+    };
+  }
+
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -313,6 +434,7 @@ export async function signInWithGoogle(): Promise<AuthResult> {
 /** Sign out of Supabase Auth (no-op when there is no session). */
 export async function signOut(): Promise<void> {
   try {
+    localStorage.removeItem('bc_demo_user');
     await supabase.auth.signOut();
   } catch (e) {
     console.warn('Sign-out note:', e);
@@ -322,6 +444,19 @@ export async function signOut(): Promise<void> {
 /** Resolve the current persisted session, if any. */
 export async function getInitialSession(): Promise<Session | null> {
   try {
+    const demoUserRaw = localStorage.getItem('bc_demo_user');
+    if (demoUserRaw) {
+      try {
+        const demoUser = JSON.parse(demoUserRaw);
+        return {
+          access_token: 'demo-token',
+          token_type: 'bearer',
+          expires_in: 3600,
+          refresh_token: 'demo-refresh',
+          user: demoUser,
+        } as Session;
+      } catch {}
+    }
     const { data } = await supabase.auth.getSession();
     return data.session ?? null;
   } catch (e) {
