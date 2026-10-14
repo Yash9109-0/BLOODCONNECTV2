@@ -1,4 +1,4 @@
-export type UserRole = 'hospital' | 'donor';
+export type UserRole = 'hospital' | 'donor' | 'super_admin';
 
 export interface AuthSession {
   isAuthenticated: boolean;

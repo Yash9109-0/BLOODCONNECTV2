@@ -220,37 +220,55 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         <button
           type="button"
           onClick={() => handleRoleChange('donor')}
-          className={`flex-1 py-2.5 px-3 rounded-lg flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all duration-200 ${
+          className={`flex-1 py-2 px-2 rounded-lg flex items-center justify-center gap-1 text-[12px] font-semibold transition-all duration-200 ${
             activeRole === 'donor'
               ? 'bg-white text-[#b70011] shadow-xs'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <span
-            className="material-symbols-outlined text-[18px]"
+            className="material-symbols-outlined text-[17px]"
             style={activeRole === 'donor' ? { fontVariationSettings: "'FILL' 1" } : undefined}
           >
             favorite
           </span>
-          <span>Donor / Patient</span>
+          <span className="truncate">Donor</span>
         </button>
 
         <button
           type="button"
           onClick={() => handleRoleChange('hospital')}
-          className={`flex-1 py-2.5 px-3 rounded-lg flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all duration-200 ${
+          className={`flex-1 py-2 px-2 rounded-lg flex items-center justify-center gap-1 text-[12px] font-semibold transition-all duration-200 ${
             activeRole === 'hospital'
               ? 'bg-white text-[#b70011] shadow-xs'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <span
-            className="material-symbols-outlined text-[18px]"
+            className="material-symbols-outlined text-[17px]"
             style={activeRole === 'hospital' ? { fontVariationSettings: "'FILL' 1" } : undefined}
           >
             local_hospital
           </span>
-          <span>Hospital Admin</span>
+          <span className="truncate">Hospital</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleRoleChange('super_admin')}
+          className={`flex-1 py-2 px-2 rounded-lg flex items-center justify-center gap-1 text-[12px] font-semibold transition-all duration-200 ${
+            activeRole === 'super_admin'
+              ? 'bg-white text-indigo-700 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <span
+            className="material-symbols-outlined text-[17px]"
+            style={activeRole === 'super_admin' ? { fontVariationSettings: "'FILL' 1" } : undefined}
+          >
+            shield_person
+          </span>
+          <span className="truncate">Admin</span>
         </button>
       </div>
 
@@ -258,23 +276,33 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       <div className="mt-2.5 bg-slate-50 border border-slate-200/80 p-3 rounded-xl flex items-center gap-3">
         <div
           className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-            activeRole === 'donor'
+            activeRole === 'super_admin'
+              ? 'bg-indigo-100 text-indigo-700'
+              : activeRole === 'donor'
               ? 'bg-red-100 text-[#b70011]'
               : 'bg-blue-100 text-blue-700'
           }`}
         >
           <span className="material-symbols-outlined text-[20px]">
-            {activeRole === 'donor' ? 'water_drop' : 'local_hospital'}
+            {activeRole === 'super_admin'
+              ? 'shield_person'
+              : activeRole === 'donor'
+              ? 'water_drop'
+              : 'local_hospital'}
           </span>
         </div>
         <div className="flex flex-col min-w-0">
           <span className="text-[13px] font-semibold text-[#0b1c30]">
-            {activeRole === 'donor'
+            {activeRole === 'super_admin'
+              ? 'State Health Authority & Super Admin'
+              : activeRole === 'donor'
               ? 'Individual Donor & Recipient Access'
               : 'Licensed Hospital & Blood Center Portal'}
           </span>
           <span className="text-[12px] text-slate-500 truncate">
-            {activeRole === 'donor'
+            {activeRole === 'super_admin'
+              ? 'Review pending clinical licenses, approve blood banks & audit state lifeline.'
+              : activeRole === 'donor'
               ? 'Pledge donations, track blood units & receive local red alerts.'
               : 'Broadcast SOS requests, dispatch emergency units & manage cold stock.'}
           </span>
@@ -576,9 +604,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               <>
                 <span>
                   {authMode === 'signin'
-                    ? activeRole === 'donor'
+                    ? activeRole === 'super_admin'
+                      ? 'Access Super Admin Console'
+                      : activeRole === 'donor'
                       ? 'Access Donor Dashboard'
                       : 'Authorize Hospital Console'
+                    : activeRole === 'super_admin'
+                    ? 'Register Authority Account'
                     : activeRole === 'donor'
                     ? 'Complete Donor Registration'
                     : 'Register Hospital Terminal'}

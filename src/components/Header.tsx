@@ -34,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const getPortalLabel = () => {
     if (!isAuthenticated) return 'National Rapid Response';
+    if (activeRole === 'super_admin') return 'Super Admin Verification Console';
     if (activeRole === 'hospital') return 'Hospital Admin Portal';
     return 'Voluntary Donor Hub';
   };

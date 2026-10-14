@@ -70,6 +70,7 @@ function readableAuthError(message: string): string {
 export function getUserRole(user: User): UserRole {
   const meta = (user.user_metadata || {}) as Record<string, unknown>;
   const role = String(meta.role || meta.user_role || '').toLowerCase();
+  if (role === 'super_admin' || role === 'superadmin' || role === 'admin') return 'super_admin';
   return role === 'hospital' ? 'hospital' : 'donor';
 }
 

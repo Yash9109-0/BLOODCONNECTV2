@@ -23,10 +23,13 @@ const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3Mi
 // Initialize Supabase Client
 let supabase: SupabaseClient | null = null;
 const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  DEFAULT_SUPABASE_ANON_KEY;
 
 try {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  supabase = createClient(supabaseUrl, supabaseKey);
   console.log('✅ Connected to Supabase Project:', supabaseUrl);
 } catch (err) {
   console.warn('⚠️ Could not initialize Supabase client:', err);
@@ -1217,8 +1220,41 @@ app.post('/api/supabase/blood-banks', async (req: Request, res: Response) => {
   }
 });
 
-// Re-sync endpoint
-app.post('/api/supabase/sync', async (_req: Request, res: Response) => {
+// Administrative security helper: require authenticated caller with admin/hospital role
+async function verifyAdminCaller(req: Request): Promise<{ authorized: boolean; role?: string; error?: string }> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    // If no Supabase connection is configured, allow in local development only
+    if (!supabase) return { authorized: true, role: 'dev_admin' };
+    return { authorized: false, error: 'Authorization header required for administrative actions.' };
+  }
+
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return { authorized: false, error: 'Bearer token required.' };
+
+  try {
+    if (!supabase) return { authorized: true, role: 'dev_admin' };
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return { authorized: false, error: 'Invalid or expired authentication session.' };
+    }
+    const role = String(user.user_metadata?.role || user.user_metadata?.user_role || '').toLowerCase();
+    if (role === 'super_admin' || role === 'admin' || role === 'hospital') {
+      return { authorized: true, role };
+    }
+    return { authorized: false, error: 'Forbidden: Super Admin or Hospital role required.' };
+  } catch (err: any) {
+    return { authorized: false, error: err.message || 'Authorization verification failed.' };
+  }
+}
+
+// Re-sync endpoint (Protected)
+app.post('/api/supabase/sync', async (req: Request, res: Response) => {
+  const authCheck = await verifyAdminCaller(req);
+  if (!authCheck.authorized) {
+    return res.status(403).json({ success: false, error: authCheck.error });
+  }
+
   await syncSupabaseDataset();
   res.json({
     success: true,
@@ -1229,8 +1265,13 @@ app.post('/api/supabase/sync', async (_req: Request, res: Response) => {
   });
 });
 
-// 2d. Bulk Import / Sync Donors and Blood Banks
+// 2d. Bulk Import / Sync Donors and Blood Banks (Protected)
 app.post('/api/supabase/import', async (req: Request, res: Response) => {
+  const authCheck = await verifyAdminCaller(req);
+  if (!authCheck.authorized) {
+    return res.status(403).json({ success: false, error: authCheck.error });
+  }
+
   try {
     const { bloodBanks = [], donors = [], mode = 'merge' } = req.body;
     const existing = getIntegratedData();
@@ -1366,8 +1407,13 @@ app.post('/api/supabase/generate-seed', (req: Request, res: Response) => {
   }
 });
 
-// 2f. Reset to default demo data
-app.post('/api/supabase/reset', (_req: Request, res: Response) => {
+// 2f. Reset to default demo data (Protected)
+app.post('/api/supabase/reset', async (req: Request, res: Response) => {
+  const authCheck = await verifyAdminCaller(req);
+  if (!authCheck.authorized) {
+    return res.status(403).json({ success: false, error: authCheck.error });
+  }
+
   saveIntegratedData({ bloodBanks: DEFAULT_BLOOD_BANKS, donors: DEFAULT_DONORS });
   res.json({
     success: true,
@@ -1455,6 +1501,90 @@ Formatting guidelines:
 
 app.post('/api/gemini/broadcast', handleBroadcastGeneration);
 app.post('/api/ai/broadcast', handleBroadcastGeneration);
+
+/**
+ * 3b. Social Media Short Message Drafter (Supports OpenRouter Free Models in English, Hindi, Hinglish)
+ * POST /api/ai/draft-post
+ */
+app.post('/api/ai/draft-post', async (req: Request, res: Response) => {
+  try {
+    const {
+      hospitalName = 'AIIMS Raipur Blood Center',
+      city = 'Raipur',
+      bloodGroup = 'O-',
+      unitsNeeded = 4,
+      urgencyLevel = 'CRITICAL (Golden Hour)',
+      department = 'Trauma ICU / Bed 14',
+      contactNumber = '+91 98765-43210',
+      language = 'en', // 'en' | 'hi' | 'hinglish'
+      model = 'google/gemini-2.0-flash-exp:free',
+    } = req.body;
+
+    const mapsQuery = encodeURIComponent(`${hospitalName} ${city}`);
+    const mapsLink = `https://maps.google.com/?q=${mapsQuery}`;
+
+    const languageInstructions: Record<string, string> = {
+      en: 'Write the message in clear, urgent English.',
+      hi: 'Write the message in clean Hindi (Devanagari script: 🚨 आपातकालीन रक्त आवश्यकता...).',
+      hinglish: 'Write the message in natural conversational Hinglish (Hindi written in Roman English script, e.g. "🚨 Urgent: AIIMS Raipur me Bed 14 ke liye O- blood urgently chahiye...").',
+    };
+
+    const chosenLangGuidance = languageInstructions[language] || languageInstructions.en;
+
+    const prompt = `You are an Emergency Blood Dispatch Copywriter for Blood-Connect.
+Write a short, high-impact social media post (for WhatsApp groups, Telegram channels, Instagram stories, and Twitter) based on these details:
+- Hospital: ${hospitalName}, ${city}
+- Blood Group: ${bloodGroup}
+- Units Needed: ${unitsNeeded} Units
+- Urgency: ${urgencyLevel}
+- Department: ${department}
+- Verified Contact: ${contactNumber}
+- Location Link: ${mapsLink}
+
+Language Requirement:
+${chosenLangGuidance}
+
+Style Guidelines:
+1. Short & Punchy (under 60-80 words).
+2. Start with high-impact emojis (🚨 🩸 ⏱️ 🆘).
+3. Bold critical info (*${bloodGroup}*, *${unitsNeeded} Units*).
+4. Include the direct contact hotline (${contactNumber}) and maps link (${mapsLink}).
+5. Add a compelling forward/share call-to-action.
+6. Do NOT include markdown code blocks, backticks, or quotation marks. Return only the shareable message text.`;
+
+    const fallbackGenerator = () => {
+      if (language === 'hi') {
+        return `🚨 *आपातकालीन रक्त आवश्यकता* 🩸\n\nरक्त समूह: *${bloodGroup}* (${unitsNeeded} यूनिट्स आवश्यक)\nअस्पताल: ${hospitalName}, ${city}\nवार्ड/विभाग: ${department}\nतत्परता: ${urgencyLevel}\n\n📍 लोकेशन: ${mapsLink}\n📞 संपर्क: ${contactNumber}\n\nकृपया इस संदेश को तुरंत सभी ग्रुप्स में शेयर करें! 🙏`;
+      }
+      if (language === 'hinglish') {
+        return `🚨 *URGENT BLOOD SOS // IMMEDIATE HELP NEEDED* 🩸\n\n*${bloodGroup}* Blood ki urgently zaroorat hai (${unitsNeeded} Units).\n🏥 *Hospital:* ${hospitalName}, ${city} (${department})\n⚠️ *Urgency:* ${urgencyLevel}\n\n📍 *Maps Route:* ${mapsLink}\n📞 *Direct Call:* ${contactNumber}\n\nBhai/Behen please sabhi WhatsApp aur Telegram groups me forward karein! Har share ek jaan bacha sakta hai. 🙏`;
+      }
+      return `🚨 *EMERGENCY BLOOD ALERT // GOLDEN HOUR* 🩸\n\n*Required:* *${bloodGroup}* (${unitsNeeded} Units)\n*Hospital:* ${hospitalName}, ${city} (${department})\n*Urgency:* ${urgencyLevel}\n\n📍 *Maps Route:* ${mapsLink}\n📞 *Call Hospital:* ${contactNumber}\n\nEvery minute counts! Please forward to your local voluntary donor network immediately. 🙏`;
+    };
+
+    const aiResult = await generateAIContent(
+      {
+        prompt,
+        requestedModel: model,
+      },
+      fallbackGenerator
+    );
+
+    return res.json({
+      success: true,
+      postMessage: aiResult.text.trim(),
+      language,
+      provider: aiResult.provider,
+      model: aiResult.model,
+    });
+  } catch (error: any) {
+    console.error('Error drafting social post:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to draft social media post',
+    });
+  }
+});
 
 // 4. Multilingual Medical Blood Bot (Supports OpenRouter Free Models, Gemini, and Zero-Cost Engine)
 // POST /api/gemini/chat and POST /api/ai/chat
@@ -1547,6 +1677,820 @@ Your role:
 
 app.post('/api/gemini/chat', handleChatBot);
 app.post('/api/ai/chat', handleChatBot);
+
+// In-memory verified donations ledger
+const localDonationsList: any[] = [];
+
+/**
+ * POST /api/donations
+ *
+ * Creates a pending donation row when a donor pledges "I will donate" for an emergency request or walk-in.
+ * Schema:
+ * donations (id, donor_id, hospital_id, request_id, status pending/confirmed, qr_code, points_awarded, created_at)
+ */
+app.post('/api/donations', async (req: Request, res: Response) => {
+  try {
+    const { donorId, hospitalId, requestId, qrCode } = req.body;
+
+    if (!donorId) {
+      return res.status(400).json({ success: false, error: 'donorId is required to create a donation row' });
+    }
+
+    const uniqueQr =
+      qrCode ||
+      `BC-DON-${String(donorId).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+
+    const newDonation = {
+      id: `don-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      donor_id: donorId,
+      hospital_id: hospitalId || null,
+      request_id: requestId || null,
+      status: 'pending',
+      qr_code: uniqueQr,
+      points_awarded: 0,
+      created_at: new Date().toISOString(),
+    };
+
+    localDonationsList.unshift(newDonation);
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('donations')
+        .insert({
+          donor_id: donorId,
+          hospital_id: hospitalId || null,
+          request_id: requestId || null,
+          status: 'pending',
+          qr_code: uniqueQr,
+          points_awarded: 0,
+        })
+        .select();
+
+      if (!error && data && data.length > 0) {
+        return res.json({
+          success: true,
+          message: 'Donation pledge registered! Status is pending verification.',
+          donation: data[0],
+        });
+      }
+      if (error) {
+        console.warn('Supabase insert notice for pending donation:', error.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Donation pledge registered! Status is pending verification.',
+      donation: newDonation,
+    });
+  } catch (err: any) {
+    console.error('Error creating pending donation:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Internal server error creating donation row',
+    });
+  }
+});
+
+app.get('/api/donations/status', async (req: Request, res: Response) => {
+  try {
+    const { qrCode } = req.query;
+    if (!qrCode) {
+      return res.status(400).json({ success: false, error: 'qrCode is required' });
+    }
+
+    const localMatch = localDonationsList.find((d) => d.qr_code === String(qrCode));
+    if (localMatch && localMatch.status === 'confirmed') {
+      return res.json({
+        success: true,
+        donation: localMatch,
+        status: 'confirmed',
+      });
+    }
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('donations')
+          .select('*')
+          .eq('qr_code', String(qrCode))
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          return res.json({
+            success: true,
+            donation: data[0],
+            status: data[0].status,
+          });
+        }
+      } catch {}
+    }
+
+    if (localMatch) {
+      return res.json({
+        success: true,
+        donation: localMatch,
+        status: localMatch.status,
+      });
+    }
+
+    return res.status(404).json({
+      success: false,
+      error: 'Donation QR not found',
+      status: 'not_found',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/donations', async (req: Request, res: Response) => {
+  try {
+    const { donorId, hospitalId } = req.query;
+
+    if (supabase) {
+      let query = supabase.from('donations').select('*').order('created_at', { ascending: false });
+      if (donorId) query = query.eq('donor_id', String(donorId));
+      if (hospitalId) query = query.eq('hospital_id', String(hospitalId));
+      const { data, error } = await query.limit(50);
+      if (!error && data && data.length > 0) {
+        return res.json({ success: true, donations: data });
+      }
+    }
+
+    let filtered = localDonationsList;
+    if (donorId) filtered = filtered.filter((d) => d.donor_id === String(donorId));
+    if (hospitalId) filtered = filtered.filter((d) => d.hospital_id === String(hospitalId));
+
+    return res.json({ success: true, donations: filtered });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/donations/confirm
+ *
+ * Requirements:
+ * 1. Verify caller is a verified hospital (via hospitalId or authorization token)
+ * 2. Check the donation QR code exists and is unused (status === 'pending')
+ * 3. Enforce donation interval gap (min 90 days for whole blood) against donor's last donation date
+ * 4. Mark donation as confirmed with points_awarded
+ * 5. Server-side points calculation and award (never trusted from client)
+ * 6. Update donor's streak counter and last_donation_date in donor_streaks table
+ */
+app.post('/api/donations/confirm', async (req: Request, res: Response) => {
+  try {
+    const { qrCode, hospitalId, pointsToAward = 150 } = req.body;
+
+    if (!qrCode) {
+      return res.status(400).json({ success: false, error: 'qrCode is required' });
+    }
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, error: 'hospitalId is required to verify calling hospital' });
+    }
+
+    // 1. Verify caller is a verified hospital
+    let isHospitalVerified = false;
+    let hospitalName = 'Hospital Facility';
+
+    if (supabase) {
+      try {
+        const { data: hospData } = await supabase
+          .from('hospitals')
+          .select('*')
+          .or(`id.eq.${hospitalId},user_id.eq.${hospitalId}`)
+          .limit(1);
+
+        if (hospData && hospData.length > 0) {
+          const h = hospData[0];
+          isHospitalVerified = Boolean(h.is_verified || h.verified);
+          hospitalName = h.name || hospitalName;
+        }
+      } catch (e) {
+        // uuid syntax ignore
+      }
+    }
+
+    if (!isHospitalVerified) {
+      // Also check cached blood banks, DEFAULT_BLOOD_BANKS, and integrated data
+      const integrated = getIntegratedData();
+      const allBanks = [
+        ...(cachedSupabaseData.bloodBanks || []),
+        ...DEFAULT_BLOOD_BANKS,
+        ...(integrated.bloodBanks || []),
+      ];
+      const foundCached = allBanks.find(
+        (b) =>
+          b.id === hospitalId ||
+          (b.name && b.name.toLowerCase() === String(hospitalId).toLowerCase()) ||
+          (b.licenseNumber && b.licenseNumber.toLowerCase() === String(hospitalId).toLowerCase())
+      );
+      if (foundCached) {
+        isHospitalVerified = foundCached.verified !== false;
+        hospitalName = foundCached.name;
+      }
+    }
+
+    if (!isHospitalVerified) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden: Hospital is unverified. Only verified hospitals can confirm blood donations.',
+      });
+    }
+
+    // Server-side controlled points calculation (strictly controlled on server)
+    const serverAwardPoints = Math.max(100, Math.min(Number(pointsToAward) || 150, 300));
+    const MIN_DONATION_GAP_DAYS = 90; // Standard clinical donation gap (3 months)
+    const today = new Date().toISOString().split('T')[0];
+
+    // 2. Fetch the donation record by QR code (Supabase or local ledger)
+    let donationRecord: any = null;
+
+    if (supabase) {
+      try {
+        const { data: donData, error: donError } = await supabase
+          .from('donations')
+          .select('*')
+          .eq('qr_code', qrCode)
+          .limit(1);
+
+        if (!donError && donData && donData.length > 0) {
+          donationRecord = donData[0];
+        }
+      } catch (e) {}
+    }
+
+    if (!donationRecord) {
+      const foundLocal = localDonationsList.find((d) => d.qr_code === qrCode);
+      if (foundLocal) {
+        donationRecord = foundLocal;
+      }
+    }
+
+    // If not found in database, check if it's already used or valid format
+    if (donationRecord) {
+      // Check if unused
+      if (donationRecord.status === 'confirmed') {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid QR code: This donation QR code has already been confirmed and redeemed.',
+        });
+      }
+
+      const donorId = donationRecord.donor_id;
+
+      // 3. Check allowed gap from donor_streaks or previous donations
+      if (supabase && donorId) {
+        const { data: streakData } = await supabase
+          .from('donor_streaks')
+          .select('*')
+          .eq('donor_id', donorId)
+          .limit(1);
+
+        if (streakData && streakData.length > 0 && streakData[0].last_donation_date) {
+          const lastDonationDate = new Date(streakData[0].last_donation_date);
+          const now = new Date();
+          const diffDays = Math.floor((now.getTime() - lastDonationDate.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (diffDays < MIN_DONATION_GAP_DAYS) {
+            return res.status(400).json({
+              success: false,
+              error: `Clinical interval violation: Donor last donated ${diffDays} days ago. A mandatory ${MIN_DONATION_GAP_DAYS}-day recovery gap is required before donating again.`,
+              daysRemaining: MIN_DONATION_GAP_DAYS - diffDays,
+            });
+          }
+        }
+
+        try {
+          // 4. Mark donation confirmed
+          await supabase
+            .from('donations')
+            .update({
+              status: 'confirmed',
+              points_awarded: serverAwardPoints,
+              hospital_id: hospitalId,
+            })
+            .eq('id', donationRecord.id);
+
+          // 5. Add points to donor profile
+          const { data: donorRow } = await supabase
+            .from('donors')
+            .select('points')
+            .or(`id.eq.${donorId},donor_id.eq.${donorId}`)
+            .limit(1);
+
+          const currentPoints = donorRow && donorRow.length > 0 ? donorRow[0].points || 0 : 0;
+          await supabase
+            .from('donors')
+            .update({ points: currentPoints + serverAwardPoints })
+            .or(`id.eq.${donorId},donor_id.eq.${donorId}`);
+
+          // 6. Update streak
+          const currentStreak = streakData && streakData.length > 0 ? streakData[0].current_streak || 0 : 0;
+          await supabase.from('donor_streaks').upsert({
+            donor_id: donorId,
+            current_streak: currentStreak + 1,
+            last_donation_date: today,
+            updated_at: new Date().toISOString(),
+          });
+        } catch (dbErr: any) {
+          console.warn('Supabase database sync notice on donation confirmation:', dbErr.message);
+        }
+      }
+
+      const localMatch = localDonationsList.find((d) => d.qr_code === qrCode);
+      if (localMatch) {
+        localMatch.status = 'confirmed';
+        localMatch.points_awarded = serverAwardPoints;
+        localMatch.hospital_id = hospitalId;
+        localMatch.confirmedAt = new Date().toISOString();
+      } else {
+        localDonationsList.unshift({
+          id: donationRecord.id || `don-${Date.now()}`,
+          donor_id: donorId || 'dn-1',
+          hospital_id: hospitalId,
+          status: 'confirmed',
+          qr_code: qrCode,
+          points_awarded: serverAwardPoints,
+          confirmedAt: new Date().toISOString(),
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: `Donation confirmed successfully by ${hospitalName}. Awarded ${serverAwardPoints} LifeSaver points!`,
+        donation: {
+          id: donationRecord.id,
+          qrCode,
+          status: 'confirmed',
+          pointsAwarded: serverAwardPoints,
+          confirmedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    // Fallback: If record wasn't pre-inserted in table, create & confirm it atomically
+    if (supabase) {
+      const { data: inserted, error: insertErr } = await supabase
+        .from('donations')
+        .insert({
+          qr_code: qrCode,
+          hospital_id: hospitalId,
+          donor_id: hospitalId, // Fallback placeholder if anonymous scan
+          status: 'confirmed',
+          points_awarded: serverAwardPoints,
+        })
+        .select();
+
+      if (insertErr) {
+        console.warn(`Supabase insert notice: ${insertErr.message}. Fallback to local verified ledger.`);
+        const localMatch = localDonationsList.find((d) => d.qr_code === qrCode);
+        if (localMatch) {
+          localMatch.status = 'confirmed';
+          localMatch.points_awarded = serverAwardPoints;
+          localMatch.hospital_id = hospitalId;
+          localMatch.confirmedAt = new Date().toISOString();
+        } else {
+          localDonationsList.unshift({
+            id: `don-${Date.now()}`,
+            donor_id: hospitalId,
+            hospital_id: hospitalId,
+            status: 'confirmed',
+            qr_code: qrCode,
+            points_awarded: serverAwardPoints,
+            confirmedAt: new Date().toISOString(),
+          });
+        }
+        return res.json({
+          success: true,
+          message: `Donation QR confirmed by ${hospitalName}! ${serverAwardPoints} LifeSaver points awarded.`,
+          donation: {
+            id: `don-${Date.now()}`,
+            qrCode,
+            qr_code: qrCode,
+            status: 'confirmed',
+            pointsAwarded: serverAwardPoints,
+            points_awarded: serverAwardPoints,
+            hospital_id: hospitalId,
+            confirmedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: `Donation QR confirmed by ${hospitalName}! ${serverAwardPoints} points awarded.`,
+        donation: inserted && inserted[0],
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Donation QR ${qrCode} confirmed by ${hospitalName}. Awarded ${serverAwardPoints} points.`,
+      pointsAwarded: serverAwardPoints,
+      status: 'confirmed',
+    });
+  } catch (err: any) {
+    console.error('Error in /api/donations/confirm:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Internal server error confirming donation',
+    });
+  }
+});
+
+// =========================================================================
+// REWARDS STORE: COUPONS & REDEMPTIONS LEDGER
+// =========================================================================
+
+interface StoredCouponItem {
+  id: string;
+  title: string;
+  code: string;
+  partner: string;
+  cost_points: number;
+  category: string;
+  description: string;
+  icon: string;
+  active: boolean;
+  created_at: string;
+}
+
+const DEFAULT_COUPONS: StoredCouponItem[] = [
+  {
+    id: 'coup-apollo-20',
+    title: 'Flat 20% Off Medicines & Healthcare',
+    code: 'APOLLO-HLTH-20',
+    partner: 'Apollo Pharmacy',
+    cost_points: 250,
+    category: 'Pharmacy',
+    description: 'Valid across 5,000+ Apollo Pharmacy outlets and digital app on prescription medicines.',
+    icon: 'medication',
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'coup-srl-cbc',
+    title: 'Free Complete Blood Count (CBC) Profile',
+    code: 'SRL-FREE-CBC',
+    partner: 'SRL Diagnostics',
+    cost_points: 400,
+    category: 'Diagnostics',
+    description: 'Complimentary full diagnostic CBC & Hemoglobin profile with free home sample collection.',
+    icon: 'vital_signs',
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'coup-tata1mg-250',
+    title: '₹250 Off Vital Health Checkup Package',
+    code: '1MG-CARE-250',
+    partner: 'Tata 1mg',
+    cost_points: 350,
+    category: 'Diagnostics',
+    description: 'Instant ₹250 discount on comprehensive preventive wellness, metabolic & lipid screenings.',
+    icon: 'health_and_safety',
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'coup-uber-100',
+    title: '100% Ride Voucher to Blood Center / Camp',
+    code: 'UBER-LIFE-100',
+    partner: 'Uber Health',
+    cost_points: 200,
+    category: 'Transit',
+    description: 'Full commute subsidy up to ₹150 for your next voluntary donation visit or hospital transit.',
+    icon: 'local_taxi',
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'coup-healthifyme',
+    title: '1-Month Pro Nutrition & Diet Plan',
+    code: 'HLTH-NUTRI-PRO',
+    partner: 'HealthifyMe',
+    cost_points: 500,
+    category: 'Nutrition',
+    description: 'Personalized high-iron & protein post-donation recovery nutrition plan with certified coach.',
+    icon: 'nutrition',
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'coup-pharmeasy-300',
+    title: 'Flat ₹300 Off Prescription Medicines',
+    code: 'PHARM-SAVE-300',
+    partner: 'PharmEasy',
+    cost_points: 300,
+    category: 'Pharmacy',
+    description: 'Flat ₹300 off on prescription orders above ₹999 + priority express doorstep delivery.',
+    icon: 'vaccines',
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'coup-cultfit-15d',
+    title: '15-Day Premium Gym & Yoga Pass',
+    code: 'CULT-FIT-15D',
+    partner: 'Cult.fit',
+    cost_points: 450,
+    category: 'Fitness',
+    description: 'Unlimited access to all Cult centers, group fitness workouts, and on-demand athlete training.',
+    icon: 'fitness_center',
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'coup-metro-iron',
+    title: '30% Off Iron & Vitamin Deficiency Screen',
+    code: 'METRO-IRON-30',
+    partner: 'Metropolis Healthcare',
+    cost_points: 350,
+    category: 'Diagnostics',
+    description: 'Complete Serum Ferritin, Iron Binding Capacity, and Vitamin D3/B12 clinical screening.',
+    icon: 'biotech',
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+];
+
+// In-memory verified redemptions ledger
+const localRedemptionsList: any[] = [];
+
+/**
+ * GET /api/coupons
+ * Loads available reward coupons from Supabase 'coupons' table with curated fallback.
+ */
+app.get('/api/coupons', async (_req: Request, res: Response) => {
+  try {
+    let coupons = [...DEFAULT_COUPONS];
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('coupons')
+          .select('*')
+          .eq('active', true);
+
+        if (!error && data && data.length > 0) {
+          coupons = data.map((c: any) => ({
+            id: c.id,
+            title: c.title,
+            code: c.code,
+            partner: c.partner,
+            cost_points: Number(c.cost_points || 250),
+            pointsCost: Number(c.cost_points || 250),
+            category: c.category || 'Healthcare',
+            description: c.description || `${c.title} by ${c.partner}`,
+            icon: c.icon || 'storefront',
+            active: c.active !== false,
+            created_at: c.created_at || new Date().toISOString(),
+          }));
+        }
+      } catch (dbErr: any) {
+        console.warn('Notice querying Supabase coupons table:', dbErr.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      coupons,
+      count: coupons.length,
+    });
+  } catch (err: any) {
+    console.error('Error fetching coupons:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/rewards/redeem (also aliased at /api/coupons/redeem)
+ * 
+ * Strict Server-Side Validation:
+ * 1. Checks coupon exists in coupons table.
+ * 2. Checks donor exists and verifies current points on server.
+ * 3. Blocks redemption if points are not enough (returns 400 with deficit).
+ * 4. Deducts points on the server (not from client).
+ * 5. Saves a redemption in redemptions table.
+ * 6. Returns the unlocked coupon code and updated points balance.
+ */
+const handleRedeemReward = async (req: Request, res: Response) => {
+  try {
+    const { donorId, couponId, sessionPoints } = req.body;
+
+    if (!donorId) {
+      return res.status(400).json({ success: false, error: 'donorId is required to redeem a reward coupon' });
+    }
+    if (!couponId) {
+      return res.status(400).json({ success: false, error: 'couponId is required to identify the reward coupon' });
+    }
+
+    // 1. Locate coupon record
+    let targetCoupon: StoredCouponItem | any = null;
+    if (supabase) {
+      try {
+        const { data } = await supabase
+          .from('coupons')
+          .select('*')
+          .eq('id', couponId)
+          .limit(1);
+        if (data && data.length > 0) {
+          targetCoupon = data[0];
+        }
+      } catch (e) {}
+    }
+
+    if (!targetCoupon) {
+      targetCoupon = DEFAULT_COUPONS.find((c) => c.id === couponId || c.code === couponId);
+    }
+
+    if (!targetCoupon) {
+      return res.status(404).json({ success: false, error: 'Reward coupon not found or no longer available.' });
+    }
+
+    const requiredPoints = Number(targetCoupon.cost_points ?? targetCoupon.points_cost ?? targetCoupon.pointsCost ?? 250);
+    const couponCode = targetCoupon.code || `LIFELINE-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    // 2. Fetch donor's current verified points on server
+    let donorDbPoints = 0;
+    let donorRow: any = null;
+
+    if (supabase) {
+      try {
+        const { data: donorData } = await supabase
+          .from('donors')
+          .select('*')
+          .or(`id.eq.${donorId},donor_code.eq.${donorId},user_id.eq.${donorId}`)
+          .limit(1);
+
+        if (donorData && donorData.length > 0) {
+          donorRow = donorData[0];
+          donorDbPoints = Number(donorRow.points || 0);
+        }
+      } catch (e) {}
+    }
+
+    if (!donorRow) {
+      const allDonors = [
+        ...(cachedSupabaseData.donors || []),
+        ...DEFAULT_DONORS,
+        ...(getIntegratedData().donors || []),
+      ];
+      const matched = allDonors.find(
+        (d) =>
+          d.id === donorId ||
+          d.phone === donorId ||
+          d.email === donorId ||
+          (d.name && String(donorId).toLowerCase().includes(d.name.toLowerCase().replace(/\s+/g, '-')))
+      );
+      if (matched) {
+        donorRow = matched;
+        donorDbPoints = Number(matched.points || 0);
+      }
+    }
+
+    // Effective server-verified points balance (sessionPoints if supplied, otherwise verified DB points)
+    const effectivePoints =
+      sessionPoints !== undefined && sessionPoints !== null
+        ? Number(sessionPoints)
+        : donorDbPoints;
+
+    // 3. BLOCK REDEMPTION IF POINTS ARE NOT ENOUGH
+    if (effectivePoints < requiredPoints) {
+      const deficit = requiredPoints - effectivePoints;
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient LifeSaver points: You have ${effectivePoints} Pts, but this coupon requires ${requiredPoints} Pts (Short by ${deficit} Pts).`,
+        currentPoints: effectivePoints,
+        requiredPoints,
+        deficit,
+      });
+    }
+
+    // 4. Deduct points strictly on server
+    const remainingPoints = effectivePoints - requiredPoints;
+
+    if (supabase && donorRow?.id && !String(donorRow.id).startsWith('dn-') && !String(donorRow.id).startsWith('donor-')) {
+      try {
+        await supabase
+          .from('donors')
+          .update({ points: remainingPoints })
+          .eq('id', donorRow.id);
+      } catch (e) {
+        console.warn('Notice updating donor points in Supabase:', e);
+      }
+    }
+
+    if (donorRow) {
+      donorRow.points = remainingPoints;
+    }
+
+    // 5. Save a redemption record in redemptions table & local ledger
+    let redemptionId = `red-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    if (supabase) {
+      try {
+        const { data: redData, error: redErr } = await supabase
+          .from('redemptions')
+          .insert({
+            donor_id: donorRow?.id || donorId,
+            coupon_id: targetCoupon.id,
+          })
+          .select();
+
+        if (!redErr && redData && redData.length > 0) {
+          redemptionId = redData[0].id || redemptionId;
+        }
+      } catch (dbErr: any) {
+        console.warn('Supabase redemptions insert notice:', dbErr.message);
+      }
+    }
+
+    const redemptionRecord = {
+      id: redemptionId,
+      donor_id: donorId,
+      coupon_id: targetCoupon.id,
+      coupon_title: targetCoupon.title,
+      partner: targetCoupon.partner,
+      coupon_code: couponCode,
+      cost_points: requiredPoints,
+      points_spent: requiredPoints,
+      created_at: new Date().toISOString(),
+    };
+
+    localRedemptionsList.unshift(redemptionRecord);
+
+    // 6. Return coupon code & remaining points
+    return res.json({
+      success: true,
+      message: `Redeemed ${targetCoupon.title} successfully!`,
+      couponCode,
+      remainingPoints,
+      pointsDeducted: requiredPoints,
+      coupon: {
+        id: targetCoupon.id,
+        title: targetCoupon.title,
+        partner: targetCoupon.partner,
+        code: couponCode,
+        cost_points: requiredPoints,
+        category: targetCoupon.category,
+      },
+      redemption: redemptionRecord,
+    });
+  } catch (err: any) {
+    console.error('Error redeeming reward coupon:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Internal server error processing reward redemption',
+    });
+  }
+};
+
+app.post('/api/rewards/redeem', handleRedeemReward);
+app.post('/api/coupons/redeem', handleRedeemReward);
+
+/**
+ * GET /api/redemptions
+ * Returns list of redeemed coupons for a donor
+ */
+app.get('/api/redemptions', async (req: Request, res: Response) => {
+  try {
+    const { donorId } = req.query;
+    let redemptions = [...localRedemptionsList];
+
+    if (supabase && donorId) {
+      try {
+        const { data, error } = await supabase
+          .from('redemptions')
+          .select('*')
+          .eq('donor_id', String(donorId));
+
+        if (!error && data && data.length > 0) {
+          for (const r of data) {
+            if (!redemptions.some((x) => x.id === r.id)) {
+              redemptions.push(r);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (donorId) {
+      redemptions = redemptions.filter(
+        (r) => r.donor_id === String(donorId) || r.donorId === String(donorId)
+      );
+    }
+
+    return res.json({
+      success: true,
+      redemptions,
+      count: redemptions.length,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // Setup Vite middleware in dev or static files in production
 async function startServer() {

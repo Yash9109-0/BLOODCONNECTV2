@@ -16,9 +16,9 @@ const DEFAULT_SUPABASE_URL = "https://fyqeuamxgtjgjzutvvhm.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5cWV1YW14Z3RqZ2p6dXR2dmhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NTgyMTUsImV4cCI6MjEwNjMzNDIxNX0.Oi2ddnJmY1MC_-gp73o9fw3Ew9TVVqYJf_lFqIwhIW8";
 let supabase = null;
 const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 try {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  supabase = createClient(supabaseUrl, supabaseKey);
   console.log("\u2705 Connected to Supabase Project:", supabaseUrl);
 } catch (err) {
   console.warn("\u26A0\uFE0F Could not initialize Supabase client:", err);
@@ -1014,7 +1014,34 @@ app.post("/api/supabase/blood-banks", async (req, res) => {
     return res.status(500).json({ success: false, error: error.message || "Failed to add hospital" });
   }
 });
-app.post("/api/supabase/sync", async (_req, res) => {
+async function verifyAdminCaller(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    if (!supabase) return { authorized: true, role: "dev_admin" };
+    return { authorized: false, error: "Authorization header required for administrative actions." };
+  }
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return { authorized: false, error: "Bearer token required." };
+  try {
+    if (!supabase) return { authorized: true, role: "dev_admin" };
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return { authorized: false, error: "Invalid or expired authentication session." };
+    }
+    const role = String(user.user_metadata?.role || user.user_metadata?.user_role || "").toLowerCase();
+    if (role === "super_admin" || role === "admin" || role === "hospital") {
+      return { authorized: true, role };
+    }
+    return { authorized: false, error: "Forbidden: Super Admin or Hospital role required." };
+  } catch (err) {
+    return { authorized: false, error: err.message || "Authorization verification failed." };
+  }
+}
+app.post("/api/supabase/sync", async (req, res) => {
+  const authCheck = await verifyAdminCaller(req);
+  if (!authCheck.authorized) {
+    return res.status(403).json({ success: false, error: authCheck.error });
+  }
   await syncSupabaseDataset();
   res.json({
     success: true,
@@ -1025,6 +1052,10 @@ app.post("/api/supabase/sync", async (_req, res) => {
   });
 });
 app.post("/api/supabase/import", async (req, res) => {
+  const authCheck = await verifyAdminCaller(req);
+  if (!authCheck.authorized) {
+    return res.status(403).json({ success: false, error: authCheck.error });
+  }
   try {
     const { bloodBanks = [], donors = [], mode = "merge" } = req.body;
     const existing = getIntegratedData();
@@ -1152,7 +1183,11 @@ VALUES
     return res.status(500).json({ success: false, error: "Failed to generate seed SQL" });
   }
 });
-app.post("/api/supabase/reset", (_req, res) => {
+app.post("/api/supabase/reset", async (req, res) => {
+  const authCheck = await verifyAdminCaller(req);
+  if (!authCheck.authorized) {
+    return res.status(403).json({ success: false, error: authCheck.error });
+  }
   saveIntegratedData({ bloodBanks: DEFAULT_BLOOD_BANKS, donors: DEFAULT_DONORS });
   res.json({
     success: true,
@@ -1233,6 +1268,107 @@ Formatting guidelines:
 };
 app.post("/api/gemini/broadcast", handleBroadcastGeneration);
 app.post("/api/ai/broadcast", handleBroadcastGeneration);
+app.post("/api/ai/draft-post", async (req, res) => {
+  try {
+    const {
+      hospitalName = "AIIMS Raipur Blood Center",
+      city = "Raipur",
+      bloodGroup = "O-",
+      unitsNeeded = 4,
+      urgencyLevel = "CRITICAL (Golden Hour)",
+      department = "Trauma ICU / Bed 14",
+      contactNumber = "+91 98765-43210",
+      language = "en",
+      // 'en' | 'hi' | 'hinglish'
+      model = "google/gemini-2.0-flash-exp:free"
+    } = req.body;
+    const mapsQuery = encodeURIComponent(`${hospitalName} ${city}`);
+    const mapsLink = `https://maps.google.com/?q=${mapsQuery}`;
+    const languageInstructions = {
+      en: "Write the message in clear, urgent English.",
+      hi: "Write the message in clean Hindi (Devanagari script: \u{1F6A8} \u0906\u092A\u093E\u0924\u0915\u093E\u0932\u0940\u0928 \u0930\u0915\u094D\u0924 \u0906\u0935\u0936\u094D\u092F\u0915\u0924\u093E...).",
+      hinglish: 'Write the message in natural conversational Hinglish (Hindi written in Roman English script, e.g. "\u{1F6A8} Urgent: AIIMS Raipur me Bed 14 ke liye O- blood urgently chahiye...").'
+    };
+    const chosenLangGuidance = languageInstructions[language] || languageInstructions.en;
+    const prompt = `You are an Emergency Blood Dispatch Copywriter for Blood-Connect.
+Write a short, high-impact social media post (for WhatsApp groups, Telegram channels, Instagram stories, and Twitter) based on these details:
+- Hospital: ${hospitalName}, ${city}
+- Blood Group: ${bloodGroup}
+- Units Needed: ${unitsNeeded} Units
+- Urgency: ${urgencyLevel}
+- Department: ${department}
+- Verified Contact: ${contactNumber}
+- Location Link: ${mapsLink}
+
+Language Requirement:
+${chosenLangGuidance}
+
+Style Guidelines:
+1. Short & Punchy (under 60-80 words).
+2. Start with high-impact emojis (\u{1F6A8} \u{1FA78} \u23F1\uFE0F \u{1F198}).
+3. Bold critical info (*${bloodGroup}*, *${unitsNeeded} Units*).
+4. Include the direct contact hotline (${contactNumber}) and maps link (${mapsLink}).
+5. Add a compelling forward/share call-to-action.
+6. Do NOT include markdown code blocks, backticks, or quotation marks. Return only the shareable message text.`;
+    const fallbackGenerator = () => {
+      if (language === "hi") {
+        return `\u{1F6A8} *\u0906\u092A\u093E\u0924\u0915\u093E\u0932\u0940\u0928 \u0930\u0915\u094D\u0924 \u0906\u0935\u0936\u094D\u092F\u0915\u0924\u093E* \u{1FA78}
+
+\u0930\u0915\u094D\u0924 \u0938\u092E\u0942\u0939: *${bloodGroup}* (${unitsNeeded} \u092F\u0942\u0928\u093F\u091F\u094D\u0938 \u0906\u0935\u0936\u094D\u092F\u0915)
+\u0905\u0938\u094D\u092A\u0924\u093E\u0932: ${hospitalName}, ${city}
+\u0935\u093E\u0930\u094D\u0921/\u0935\u093F\u092D\u093E\u0917: ${department}
+\u0924\u0924\u094D\u092A\u0930\u0924\u093E: ${urgencyLevel}
+
+\u{1F4CD} \u0932\u094B\u0915\u0947\u0936\u0928: ${mapsLink}
+\u{1F4DE} \u0938\u0902\u092A\u0930\u094D\u0915: ${contactNumber}
+
+\u0915\u0943\u092A\u092F\u093E \u0907\u0938 \u0938\u0902\u0926\u0947\u0936 \u0915\u094B \u0924\u0941\u0930\u0902\u0924 \u0938\u092D\u0940 \u0917\u094D\u0930\u0941\u092A\u094D\u0938 \u092E\u0947\u0902 \u0936\u0947\u092F\u0930 \u0915\u0930\u0947\u0902! \u{1F64F}`;
+      }
+      if (language === "hinglish") {
+        return `\u{1F6A8} *URGENT BLOOD SOS // IMMEDIATE HELP NEEDED* \u{1FA78}
+
+*${bloodGroup}* Blood ki urgently zaroorat hai (${unitsNeeded} Units).
+\u{1F3E5} *Hospital:* ${hospitalName}, ${city} (${department})
+\u26A0\uFE0F *Urgency:* ${urgencyLevel}
+
+\u{1F4CD} *Maps Route:* ${mapsLink}
+\u{1F4DE} *Direct Call:* ${contactNumber}
+
+Bhai/Behen please sabhi WhatsApp aur Telegram groups me forward karein! Har share ek jaan bacha sakta hai. \u{1F64F}`;
+      }
+      return `\u{1F6A8} *EMERGENCY BLOOD ALERT // GOLDEN HOUR* \u{1FA78}
+
+*Required:* *${bloodGroup}* (${unitsNeeded} Units)
+*Hospital:* ${hospitalName}, ${city} (${department})
+*Urgency:* ${urgencyLevel}
+
+\u{1F4CD} *Maps Route:* ${mapsLink}
+\u{1F4DE} *Call Hospital:* ${contactNumber}
+
+Every minute counts! Please forward to your local voluntary donor network immediately. \u{1F64F}`;
+    };
+    const aiResult = await generateAIContent(
+      {
+        prompt,
+        requestedModel: model
+      },
+      fallbackGenerator
+    );
+    return res.json({
+      success: true,
+      postMessage: aiResult.text.trim(),
+      language,
+      provider: aiResult.provider,
+      model: aiResult.model
+    });
+  } catch (error) {
+    console.error("Error drafting social post:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to draft social media post"
+    });
+  }
+});
 const handleChatBot = async (req, res) => {
   try {
     const {
@@ -1332,6 +1468,609 @@ Your role:
 };
 app.post("/api/gemini/chat", handleChatBot);
 app.post("/api/ai/chat", handleChatBot);
+const localDonationsList = [];
+app.post("/api/donations", async (req, res) => {
+  try {
+    const { donorId, hospitalId, requestId, qrCode } = req.body;
+    if (!donorId) {
+      return res.status(400).json({ success: false, error: "donorId is required to create a donation row" });
+    }
+    const uniqueQr = qrCode || `BC-DON-${String(donorId).replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+    const newDonation = {
+      id: `don-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      donor_id: donorId,
+      hospital_id: hospitalId || null,
+      request_id: requestId || null,
+      status: "pending",
+      qr_code: uniqueQr,
+      points_awarded: 0,
+      created_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    localDonationsList.unshift(newDonation);
+    if (supabase) {
+      const { data, error } = await supabase.from("donations").insert({
+        donor_id: donorId,
+        hospital_id: hospitalId || null,
+        request_id: requestId || null,
+        status: "pending",
+        qr_code: uniqueQr,
+        points_awarded: 0
+      }).select();
+      if (!error && data && data.length > 0) {
+        return res.json({
+          success: true,
+          message: "Donation pledge registered! Status is pending verification.",
+          donation: data[0]
+        });
+      }
+      if (error) {
+        console.warn("Supabase insert notice for pending donation:", error.message);
+      }
+    }
+    return res.json({
+      success: true,
+      message: "Donation pledge registered! Status is pending verification.",
+      donation: newDonation
+    });
+  } catch (err) {
+    console.error("Error creating pending donation:", err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Internal server error creating donation row"
+    });
+  }
+});
+app.get("/api/donations/status", async (req, res) => {
+  try {
+    const { qrCode } = req.query;
+    if (!qrCode) {
+      return res.status(400).json({ success: false, error: "qrCode is required" });
+    }
+    const localMatch = localDonationsList.find((d) => d.qr_code === String(qrCode));
+    if (localMatch && localMatch.status === "confirmed") {
+      return res.json({
+        success: true,
+        donation: localMatch,
+        status: "confirmed"
+      });
+    }
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from("donations").select("*").eq("qr_code", String(qrCode)).limit(1);
+        if (!error && data && data.length > 0) {
+          return res.json({
+            success: true,
+            donation: data[0],
+            status: data[0].status
+          });
+        }
+      } catch {
+      }
+    }
+    if (localMatch) {
+      return res.json({
+        success: true,
+        donation: localMatch,
+        status: localMatch.status
+      });
+    }
+    return res.status(404).json({
+      success: false,
+      error: "Donation QR not found",
+      status: "not_found"
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+app.get("/api/donations", async (req, res) => {
+  try {
+    const { donorId, hospitalId } = req.query;
+    if (supabase) {
+      let query = supabase.from("donations").select("*").order("created_at", { ascending: false });
+      if (donorId) query = query.eq("donor_id", String(donorId));
+      if (hospitalId) query = query.eq("hospital_id", String(hospitalId));
+      const { data, error } = await query.limit(50);
+      if (!error && data && data.length > 0) {
+        return res.json({ success: true, donations: data });
+      }
+    }
+    let filtered = localDonationsList;
+    if (donorId) filtered = filtered.filter((d) => d.donor_id === String(donorId));
+    if (hospitalId) filtered = filtered.filter((d) => d.hospital_id === String(hospitalId));
+    return res.json({ success: true, donations: filtered });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+app.post("/api/donations/confirm", async (req, res) => {
+  try {
+    const { qrCode, hospitalId, pointsToAward = 150 } = req.body;
+    if (!qrCode) {
+      return res.status(400).json({ success: false, error: "qrCode is required" });
+    }
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, error: "hospitalId is required to verify calling hospital" });
+    }
+    let isHospitalVerified = false;
+    let hospitalName = "Hospital Facility";
+    if (supabase) {
+      try {
+        const { data: hospData } = await supabase.from("hospitals").select("*").or(`id.eq.${hospitalId},user_id.eq.${hospitalId}`).limit(1);
+        if (hospData && hospData.length > 0) {
+          const h = hospData[0];
+          isHospitalVerified = Boolean(h.is_verified || h.verified);
+          hospitalName = h.name || hospitalName;
+        }
+      } catch (e) {
+      }
+    }
+    if (!isHospitalVerified) {
+      const integrated = getIntegratedData();
+      const allBanks = [
+        ...cachedSupabaseData.bloodBanks || [],
+        ...DEFAULT_BLOOD_BANKS,
+        ...integrated.bloodBanks || []
+      ];
+      const foundCached = allBanks.find(
+        (b) => b.id === hospitalId || b.name && b.name.toLowerCase() === String(hospitalId).toLowerCase() || b.licenseNumber && b.licenseNumber.toLowerCase() === String(hospitalId).toLowerCase()
+      );
+      if (foundCached) {
+        isHospitalVerified = foundCached.verified !== false;
+        hospitalName = foundCached.name;
+      }
+    }
+    if (!isHospitalVerified) {
+      return res.status(403).json({
+        success: false,
+        error: "Forbidden: Hospital is unverified. Only verified hospitals can confirm blood donations."
+      });
+    }
+    const serverAwardPoints = Math.max(100, Math.min(Number(pointsToAward) || 150, 300));
+    const MIN_DONATION_GAP_DAYS = 90;
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    let donationRecord = null;
+    if (supabase) {
+      try {
+        const { data: donData, error: donError } = await supabase.from("donations").select("*").eq("qr_code", qrCode).limit(1);
+        if (!donError && donData && donData.length > 0) {
+          donationRecord = donData[0];
+        }
+      } catch (e) {
+      }
+    }
+    if (!donationRecord) {
+      const foundLocal = localDonationsList.find((d) => d.qr_code === qrCode);
+      if (foundLocal) {
+        donationRecord = foundLocal;
+      }
+    }
+    if (donationRecord) {
+      if (donationRecord.status === "confirmed") {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid QR code: This donation QR code has already been confirmed and redeemed."
+        });
+      }
+      const donorId = donationRecord.donor_id;
+      if (supabase && donorId) {
+        const { data: streakData } = await supabase.from("donor_streaks").select("*").eq("donor_id", donorId).limit(1);
+        if (streakData && streakData.length > 0 && streakData[0].last_donation_date) {
+          const lastDonationDate = new Date(streakData[0].last_donation_date);
+          const now = /* @__PURE__ */ new Date();
+          const diffDays = Math.floor((now.getTime() - lastDonationDate.getTime()) / (1e3 * 60 * 60 * 24));
+          if (diffDays < MIN_DONATION_GAP_DAYS) {
+            return res.status(400).json({
+              success: false,
+              error: `Clinical interval violation: Donor last donated ${diffDays} days ago. A mandatory ${MIN_DONATION_GAP_DAYS}-day recovery gap is required before donating again.`,
+              daysRemaining: MIN_DONATION_GAP_DAYS - diffDays
+            });
+          }
+        }
+        try {
+          await supabase.from("donations").update({
+            status: "confirmed",
+            points_awarded: serverAwardPoints,
+            hospital_id: hospitalId
+          }).eq("id", donationRecord.id);
+          const { data: donorRow } = await supabase.from("donors").select("points").or(`id.eq.${donorId},donor_id.eq.${donorId}`).limit(1);
+          const currentPoints = donorRow && donorRow.length > 0 ? donorRow[0].points || 0 : 0;
+          await supabase.from("donors").update({ points: currentPoints + serverAwardPoints }).or(`id.eq.${donorId},donor_id.eq.${donorId}`);
+          const currentStreak = streakData && streakData.length > 0 ? streakData[0].current_streak || 0 : 0;
+          await supabase.from("donor_streaks").upsert({
+            donor_id: donorId,
+            current_streak: currentStreak + 1,
+            last_donation_date: today,
+            updated_at: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        } catch (dbErr) {
+          console.warn("Supabase database sync notice on donation confirmation:", dbErr.message);
+        }
+      }
+      const localMatch = localDonationsList.find((d) => d.qr_code === qrCode);
+      if (localMatch) {
+        localMatch.status = "confirmed";
+        localMatch.points_awarded = serverAwardPoints;
+        localMatch.hospital_id = hospitalId;
+        localMatch.confirmedAt = (/* @__PURE__ */ new Date()).toISOString();
+      } else {
+        localDonationsList.unshift({
+          id: donationRecord.id || `don-${Date.now()}`,
+          donor_id: donorId || "dn-1",
+          hospital_id: hospitalId,
+          status: "confirmed",
+          qr_code: qrCode,
+          points_awarded: serverAwardPoints,
+          confirmedAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      }
+      return res.json({
+        success: true,
+        message: `Donation confirmed successfully by ${hospitalName}. Awarded ${serverAwardPoints} LifeSaver points!`,
+        donation: {
+          id: donationRecord.id,
+          qrCode,
+          status: "confirmed",
+          pointsAwarded: serverAwardPoints,
+          confirmedAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      });
+    }
+    if (supabase) {
+      const { data: inserted, error: insertErr } = await supabase.from("donations").insert({
+        qr_code: qrCode,
+        hospital_id: hospitalId,
+        donor_id: hospitalId,
+        // Fallback placeholder if anonymous scan
+        status: "confirmed",
+        points_awarded: serverAwardPoints
+      }).select();
+      if (insertErr) {
+        console.warn(`Supabase insert notice: ${insertErr.message}. Fallback to local verified ledger.`);
+        const localMatch = localDonationsList.find((d) => d.qr_code === qrCode);
+        if (localMatch) {
+          localMatch.status = "confirmed";
+          localMatch.points_awarded = serverAwardPoints;
+          localMatch.hospital_id = hospitalId;
+          localMatch.confirmedAt = (/* @__PURE__ */ new Date()).toISOString();
+        } else {
+          localDonationsList.unshift({
+            id: `don-${Date.now()}`,
+            donor_id: hospitalId,
+            hospital_id: hospitalId,
+            status: "confirmed",
+            qr_code: qrCode,
+            points_awarded: serverAwardPoints,
+            confirmedAt: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        }
+        return res.json({
+          success: true,
+          message: `Donation QR confirmed by ${hospitalName}! ${serverAwardPoints} LifeSaver points awarded.`,
+          donation: {
+            id: `don-${Date.now()}`,
+            qrCode,
+            qr_code: qrCode,
+            status: "confirmed",
+            pointsAwarded: serverAwardPoints,
+            points_awarded: serverAwardPoints,
+            hospital_id: hospitalId,
+            confirmedAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        });
+      }
+      return res.json({
+        success: true,
+        message: `Donation QR confirmed by ${hospitalName}! ${serverAwardPoints} points awarded.`,
+        donation: inserted && inserted[0]
+      });
+    }
+    return res.json({
+      success: true,
+      message: `Donation QR ${qrCode} confirmed by ${hospitalName}. Awarded ${serverAwardPoints} points.`,
+      pointsAwarded: serverAwardPoints,
+      status: "confirmed"
+    });
+  } catch (err) {
+    console.error("Error in /api/donations/confirm:", err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Internal server error confirming donation"
+    });
+  }
+});
+const DEFAULT_COUPONS = [
+  {
+    id: "coup-apollo-20",
+    title: "Flat 20% Off Medicines & Healthcare",
+    code: "APOLLO-HLTH-20",
+    partner: "Apollo Pharmacy",
+    cost_points: 250,
+    category: "Pharmacy",
+    description: "Valid across 5,000+ Apollo Pharmacy outlets and digital app on prescription medicines.",
+    icon: "medication",
+    active: true,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
+  },
+  {
+    id: "coup-srl-cbc",
+    title: "Free Complete Blood Count (CBC) Profile",
+    code: "SRL-FREE-CBC",
+    partner: "SRL Diagnostics",
+    cost_points: 400,
+    category: "Diagnostics",
+    description: "Complimentary full diagnostic CBC & Hemoglobin profile with free home sample collection.",
+    icon: "vital_signs",
+    active: true,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
+  },
+  {
+    id: "coup-tata1mg-250",
+    title: "\u20B9250 Off Vital Health Checkup Package",
+    code: "1MG-CARE-250",
+    partner: "Tata 1mg",
+    cost_points: 350,
+    category: "Diagnostics",
+    description: "Instant \u20B9250 discount on comprehensive preventive wellness, metabolic & lipid screenings.",
+    icon: "health_and_safety",
+    active: true,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
+  },
+  {
+    id: "coup-uber-100",
+    title: "100% Ride Voucher to Blood Center / Camp",
+    code: "UBER-LIFE-100",
+    partner: "Uber Health",
+    cost_points: 200,
+    category: "Transit",
+    description: "Full commute subsidy up to \u20B9150 for your next voluntary donation visit or hospital transit.",
+    icon: "local_taxi",
+    active: true,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
+  },
+  {
+    id: "coup-healthifyme",
+    title: "1-Month Pro Nutrition & Diet Plan",
+    code: "HLTH-NUTRI-PRO",
+    partner: "HealthifyMe",
+    cost_points: 500,
+    category: "Nutrition",
+    description: "Personalized high-iron & protein post-donation recovery nutrition plan with certified coach.",
+    icon: "nutrition",
+    active: true,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
+  },
+  {
+    id: "coup-pharmeasy-300",
+    title: "Flat \u20B9300 Off Prescription Medicines",
+    code: "PHARM-SAVE-300",
+    partner: "PharmEasy",
+    cost_points: 300,
+    category: "Pharmacy",
+    description: "Flat \u20B9300 off on prescription orders above \u20B9999 + priority express doorstep delivery.",
+    icon: "vaccines",
+    active: true,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
+  },
+  {
+    id: "coup-cultfit-15d",
+    title: "15-Day Premium Gym & Yoga Pass",
+    code: "CULT-FIT-15D",
+    partner: "Cult.fit",
+    cost_points: 450,
+    category: "Fitness",
+    description: "Unlimited access to all Cult centers, group fitness workouts, and on-demand athlete training.",
+    icon: "fitness_center",
+    active: true,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
+  },
+  {
+    id: "coup-metro-iron",
+    title: "30% Off Iron & Vitamin Deficiency Screen",
+    code: "METRO-IRON-30",
+    partner: "Metropolis Healthcare",
+    cost_points: 350,
+    category: "Diagnostics",
+    description: "Complete Serum Ferritin, Iron Binding Capacity, and Vitamin D3/B12 clinical screening.",
+    icon: "biotech",
+    active: true,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
+  }
+];
+const localRedemptionsList = [];
+app.get("/api/coupons", async (_req, res) => {
+  try {
+    let coupons = [...DEFAULT_COUPONS];
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from("coupons").select("*").eq("active", true);
+        if (!error && data && data.length > 0) {
+          coupons = data.map((c) => ({
+            id: c.id,
+            title: c.title,
+            code: c.code,
+            partner: c.partner,
+            cost_points: Number(c.cost_points || 250),
+            pointsCost: Number(c.cost_points || 250),
+            category: c.category || "Healthcare",
+            description: c.description || `${c.title} by ${c.partner}`,
+            icon: c.icon || "storefront",
+            active: c.active !== false,
+            created_at: c.created_at || (/* @__PURE__ */ new Date()).toISOString()
+          }));
+        }
+      } catch (dbErr) {
+        console.warn("Notice querying Supabase coupons table:", dbErr.message);
+      }
+    }
+    return res.json({
+      success: true,
+      coupons,
+      count: coupons.length
+    });
+  } catch (err) {
+    console.error("Error fetching coupons:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+const handleRedeemReward = async (req, res) => {
+  try {
+    const { donorId, couponId, sessionPoints } = req.body;
+    if (!donorId) {
+      return res.status(400).json({ success: false, error: "donorId is required to redeem a reward coupon" });
+    }
+    if (!couponId) {
+      return res.status(400).json({ success: false, error: "couponId is required to identify the reward coupon" });
+    }
+    let targetCoupon = null;
+    if (supabase) {
+      try {
+        const { data } = await supabase.from("coupons").select("*").eq("id", couponId).limit(1);
+        if (data && data.length > 0) {
+          targetCoupon = data[0];
+        }
+      } catch (e) {
+      }
+    }
+    if (!targetCoupon) {
+      targetCoupon = DEFAULT_COUPONS.find((c) => c.id === couponId || c.code === couponId);
+    }
+    if (!targetCoupon) {
+      return res.status(404).json({ success: false, error: "Reward coupon not found or no longer available." });
+    }
+    const requiredPoints = Number(targetCoupon.cost_points ?? targetCoupon.points_cost ?? targetCoupon.pointsCost ?? 250);
+    const couponCode = targetCoupon.code || `LIFELINE-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    let donorDbPoints = 0;
+    let donorRow = null;
+    if (supabase) {
+      try {
+        const { data: donorData } = await supabase.from("donors").select("*").or(`id.eq.${donorId},donor_code.eq.${donorId},user_id.eq.${donorId}`).limit(1);
+        if (donorData && donorData.length > 0) {
+          donorRow = donorData[0];
+          donorDbPoints = Number(donorRow.points || 0);
+        }
+      } catch (e) {
+      }
+    }
+    if (!donorRow) {
+      const allDonors = [
+        ...cachedSupabaseData.donors || [],
+        ...DEFAULT_DONORS,
+        ...getIntegratedData().donors || []
+      ];
+      const matched = allDonors.find(
+        (d) => d.id === donorId || d.phone === donorId || d.email === donorId || d.name && String(donorId).toLowerCase().includes(d.name.toLowerCase().replace(/\s+/g, "-"))
+      );
+      if (matched) {
+        donorRow = matched;
+        donorDbPoints = Number(matched.points || 0);
+      }
+    }
+    const effectivePoints = sessionPoints !== void 0 && sessionPoints !== null ? Number(sessionPoints) : donorDbPoints;
+    if (effectivePoints < requiredPoints) {
+      const deficit = requiredPoints - effectivePoints;
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient LifeSaver points: You have ${effectivePoints} Pts, but this coupon requires ${requiredPoints} Pts (Short by ${deficit} Pts).`,
+        currentPoints: effectivePoints,
+        requiredPoints,
+        deficit
+      });
+    }
+    const remainingPoints = effectivePoints - requiredPoints;
+    if (supabase && donorRow?.id && !String(donorRow.id).startsWith("dn-") && !String(donorRow.id).startsWith("donor-")) {
+      try {
+        await supabase.from("donors").update({ points: remainingPoints }).eq("id", donorRow.id);
+      } catch (e) {
+        console.warn("Notice updating donor points in Supabase:", e);
+      }
+    }
+    if (donorRow) {
+      donorRow.points = remainingPoints;
+    }
+    let redemptionId = `red-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    if (supabase) {
+      try {
+        const { data: redData, error: redErr } = await supabase.from("redemptions").insert({
+          donor_id: donorRow?.id || donorId,
+          coupon_id: targetCoupon.id
+        }).select();
+        if (!redErr && redData && redData.length > 0) {
+          redemptionId = redData[0].id || redemptionId;
+        }
+      } catch (dbErr) {
+        console.warn("Supabase redemptions insert notice:", dbErr.message);
+      }
+    }
+    const redemptionRecord = {
+      id: redemptionId,
+      donor_id: donorId,
+      coupon_id: targetCoupon.id,
+      coupon_title: targetCoupon.title,
+      partner: targetCoupon.partner,
+      coupon_code: couponCode,
+      cost_points: requiredPoints,
+      points_spent: requiredPoints,
+      created_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    localRedemptionsList.unshift(redemptionRecord);
+    return res.json({
+      success: true,
+      message: `Redeemed ${targetCoupon.title} successfully!`,
+      couponCode,
+      remainingPoints,
+      pointsDeducted: requiredPoints,
+      coupon: {
+        id: targetCoupon.id,
+        title: targetCoupon.title,
+        partner: targetCoupon.partner,
+        code: couponCode,
+        cost_points: requiredPoints,
+        category: targetCoupon.category
+      },
+      redemption: redemptionRecord
+    });
+  } catch (err) {
+    console.error("Error redeeming reward coupon:", err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Internal server error processing reward redemption"
+    });
+  }
+};
+app.post("/api/rewards/redeem", handleRedeemReward);
+app.post("/api/coupons/redeem", handleRedeemReward);
+app.get("/api/redemptions", async (req, res) => {
+  try {
+    const { donorId } = req.query;
+    let redemptions = [...localRedemptionsList];
+    if (supabase && donorId) {
+      try {
+        const { data, error } = await supabase.from("redemptions").select("*").eq("donor_id", String(donorId));
+        if (!error && data && data.length > 0) {
+          for (const r of data) {
+            if (!redemptions.some((x) => x.id === r.id)) {
+              redemptions.push(r);
+            }
+          }
+        }
+      } catch (e) {
+      }
+    }
+    if (donorId) {
+      redemptions = redemptions.filter(
+        (r) => r.donor_id === String(donorId) || r.donorId === String(donorId)
+      );
+    }
+    return res.json({
+      success: true,
+      redemptions,
+      count: redemptions.length
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 async function startServer() {
   const isProduction = process.env.NODE_ENV === "production";
   if (!isProduction) {

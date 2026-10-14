@@ -207,6 +207,62 @@ const INITIAL_REQUESTS: EmergencyRequest[] = [
     createdAt: '35m ago',
     status: 'Open',
   },
+  {
+    id: 'req-003',
+    hospitalName: 'Apollo Hospital Blood Bank',
+    city: 'Bilaspur',
+    bloodGroup: 'O+',
+    unitsNeeded: 3,
+    urgencyLevel: 'CRITICAL (Golden Hour)',
+    department: 'Emergency Cardiac Surgery',
+    patientRef: 'Acute Aortic Dissection',
+    contactNumber: '+91 77522-48000',
+    formattedMessage: '🚨 URGENT: 3 units O+ needed immediately at Apollo Bilaspur Cardiac ICU.',
+    createdAt: '12m ago',
+    status: 'Open',
+  },
+  {
+    id: 'req-004',
+    hospitalName: 'Ramakrishna CARE Hospital',
+    city: 'Raipur',
+    bloodGroup: 'O+',
+    unitsNeeded: 2,
+    urgencyLevel: 'Urgent',
+    department: 'Hematology & Oncology Unit',
+    patientRef: 'Platelet / Whole Blood Infusion',
+    contactNumber: '+91 77135-01000',
+    formattedMessage: '🚨 URGENT: 2 units O+ needed at Ramakrishna CARE Hospital Oncology Ward.',
+    createdAt: '45m ago',
+    status: 'Open',
+  },
+  {
+    id: 'req-005',
+    hospitalName: 'Pt. JNM Medical College',
+    city: 'Raipur',
+    bloodGroup: 'A+',
+    unitsNeeded: 4,
+    urgencyLevel: 'CRITICAL (Golden Hour)',
+    department: 'Trauma Center / Ward 4',
+    patientRef: 'High-Velocity Road Accident',
+    contactNumber: '+91 77128-90000',
+    formattedMessage: '🚨 URGENT: 4 units A+ needed at Pt. JNM Medical College Trauma Center.',
+    createdAt: '1h ago',
+    status: 'Open',
+  },
+  {
+    id: 'req-006',
+    hospitalName: 'Shri Shankaracharya Institute (SSIMS)',
+    city: 'Durg',
+    bloodGroup: 'B+',
+    unitsNeeded: 3,
+    urgencyLevel: 'Routine',
+    department: 'Pediatric Thalassemia Care',
+    patientRef: 'Monthly Transfusion Protocol',
+    contactNumber: '+91 788-2292002',
+    formattedMessage: '🚨 REQUEST: 3 units B+ needed at SSIMS Blood Bank for scheduled pediatric transfusions.',
+    createdAt: '2h ago',
+    status: 'Open',
+  },
 ];
 
 export function useBloodConnectStore() {
@@ -365,10 +421,14 @@ export function useBloodConnectStore() {
     setSession(newSession);
     setActiveRole(role);
     setActiveSubTab((prev) => {
+      if (role === 'super_admin') {
+        const validTabs = ['approvals', 'audit'];
+        return validTabs.includes(prev) ? prev : 'approvals';
+      }
       const validTabs =
         role === 'hospital'
-          ? ['inventory', 'broadcast', 'facilities', 'registry', 'camps']
-          : ['pass', 'eligibility', 'centers', 'rewards', 'bot'];
+          ? ['inventory', 'broadcast', 'confirm', 'facilities', 'registry', 'camps']
+          : ['pass', 'requests', 'inventory', 'eligibility', 'centers', 'rewards', 'bot'];
       return validTabs.includes(prev) ? prev : role === 'hospital' ? 'inventory' : 'pass';
     });
     localStorage.setItem('bc_session', JSON.stringify(newSession));
@@ -488,12 +548,12 @@ export function useBloodConnectStore() {
     localStorage.setItem('bc_requests', JSON.stringify(requests));
   }, [requests]);
 
-  // Actions
   const updateInventoryUnit = (group: string, delta: number) => {
     let updatedUnits = 0;
     setInventory((prev) =>
       prev.map((item) => {
         if (item.group === group) {
+          // Strictly prevent negative units
           const newUnits = Math.max(0, item.units + delta);
           updatedUnits = newUnits;
           let newStatus: 'Critical' | 'Low' | 'Stable' = 'Stable';
@@ -512,13 +572,42 @@ export function useBloodConnectStore() {
       })
     );
 
-    setHospital((prev) => ({
-      ...prev,
-      totalStock: Math.max(0, prev.totalStock + delta),
-    }));
+    setHospital((prev) => {
+      const currentItem = inventory.find((i) => i.group === group);
+      const currentUnits = currentItem ? currentItem.units : 0;
+      const actualDelta = Math.max(0, currentUnits + delta) - currentUnits;
+      return {
+        ...prev,
+        totalStock: Math.max(0, prev.totalStock + actualDelta),
+      };
+    });
 
-    // Async sync with Supabase
+    // Async sync with Supabase for this hospital only
     supabaseService.updateInventory(hospital.id, group, updatedUnits);
+  };
+
+  const createCamp = (campData: Omit<DonationCamp, 'id' | 'pledgedCount' | 'active'>) => {
+    const newCamp: DonationCamp = {
+      ...campData,
+      id: `camp-${Date.now()}`,
+      pledgedCount: 0,
+      active: true,
+      googleMapsUrl:
+        campData.googleMapsUrl ||
+        `https://maps.google.com/?q=${encodeURIComponent(campData.venue + ' ' + campData.city)}`,
+    };
+    setCamps((prev) => [newCamp, ...prev]);
+    return newCamp;
+  };
+
+  const updateCamp = (campId: string, updates: Partial<DonationCamp>) => {
+    setCamps((prev) =>
+      prev.map((c) => (c.id === campId ? { ...c, ...updates } : c))
+    );
+  };
+
+  const deleteCamp = (campId: string) => {
+    setCamps((prev) => prev.filter((c) => c.id !== campId));
   };
 
   const redeemVoucher = (voucherId: string) => {
@@ -666,15 +755,27 @@ export function useBloodConnectStore() {
       role,
       userEmail:
         details?.email ||
-        (role === 'hospital' ? 'coordinator@aiimsraipur.gov' : 'donor@lifeline.org'),
-      userName: details?.name || (role === 'hospital' ? 'Dr. Ananya Ray' : 'Rahul Sharma'),
-      facilityName: details?.facilityName || 'AIIMS Raipur Blood Center',
+        (role === 'super_admin'
+          ? 'superadmin@lifeline.gov.in'
+          : role === 'hospital'
+          ? 'coordinator@aiimsraipur.gov'
+          : 'donor@lifeline.org'),
+      userName:
+        details?.name ||
+        (role === 'super_admin'
+          ? 'State Health Authority'
+          : role === 'hospital'
+          ? 'Dr. Ananya Ray'
+          : 'Rahul Sharma'),
+      facilityName:
+        details?.facilityName ||
+        (role === 'super_admin' ? 'Directorate of Health Services CG' : 'AIIMS Raipur Blood Center'),
       loginTime: new Date().toISOString(),
     };
 
     setSession(newSession);
     setActiveRole(role);
-    setActiveSubTab(role === 'hospital' ? 'inventory' : 'pass');
+    setActiveSubTab(role === 'super_admin' ? 'approvals' : role === 'hospital' ? 'inventory' : 'pass');
     localStorage.setItem('bc_session', JSON.stringify(newSession));
     localStorage.setItem('bc_user_role', role);
   };
@@ -707,6 +808,9 @@ export function useBloodConnectStore() {
     redeemVoucher,
     camps,
     addWalkInDonor,
+    createCamp,
+    updateCamp,
+    deleteCamp,
     requests,
     addEmergencyRequest,
     crossHospitalStock,

@@ -10,6 +10,7 @@ import { BottomNav } from './components/BottomNav';
 import { AuthScreen } from './components/AuthScreen';
 import { HospitalDashboard } from './components/HospitalDashboard';
 import { DonorDashboard } from './components/DonorDashboard';
+import { SuperAdminDashboard } from './components/SuperAdminDashboard';
 import { UserRole } from './types';
 
 export default function App() {
@@ -31,6 +32,9 @@ export default function App() {
     redeemVoucher,
     camps,
     addWalkInDonor,
+    createCamp,
+    updateCamp,
+    deleteCamp,
     requests,
     addEmergencyRequest,
     crossHospitalStock,
@@ -94,6 +98,9 @@ export default function App() {
             onUpdateInventory={updateInventoryUnit}
             camps={camps}
             onAddWalkIn={addWalkInDonor}
+            onCreateCamp={createCamp}
+            onUpdateCamp={updateCamp}
+            onDeleteCamp={deleteCamp}
             requests={requests}
             onAddRequest={addEmergencyRequest}
             crossHospitalStock={crossHospitalStock}
@@ -116,10 +123,20 @@ export default function App() {
             onUpdateSelfTest={updateDonorSelfTest}
             onAwardReferralPoints={awardReferralPoints}
             camps={camps}
+            requests={requests}
             onNavigateToChat={() => handleSubTabSelect('bot')}
             liveBloodBanks={liveBloodBanks}
             liveDonors={liveDonors}
             onSwitchDonor={switchActiveDonor}
+          />
+        )}
+
+        {/* PAGE 4: Super Admin Dashboard ONLY (Strictly for state authority / super_admin role) */}
+        {session.isAuthenticated && session.role === 'super_admin' && (
+          <SuperAdminDashboard
+            activeSubTab={activeSubTab}
+            onSelectSubTab={handleSubTabSelect}
+            liveBloodBanks={liveBloodBanks}
           />
         )}
       </main>
