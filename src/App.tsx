@@ -52,30 +52,7 @@ export default function App() {
 
   const handleSubTabSelect = (tab: string) => {
     setActiveSubTab(tab);
-
-    // Scroll to the corresponding section smoothly
-    const sectionMap: Record<string, string> = {
-      // Hospital sections
-      inventory: 'inventory-section',
-      broadcast: 'broadcast-creator-section',
-      facilities: 'grid-section',
-      registry: 'registry-section',
-      camps: 'drives-section',
-      // Donor sections
-      pass: 'pass-section',
-      eligibility: 'eligibility-section',
-      centers: 'centers-section',
-      rewards: 'reward-store-section',
-      bot: 'bot-section',
-    };
-
-    const targetId = sectionMap[tab];
-    if (targetId) {
-      const el = document.getElementById(targetId);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth' });
-      }
-    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -110,6 +87,8 @@ export default function App() {
         {/* PAGE 2: Hospital Admin Dashboard ONLY (Strictly for authenticated hospital accounts) */}
         {session.isAuthenticated && session.role === 'hospital' && (
           <HospitalDashboard
+            activeSubTab={activeSubTab}
+            onSelectSubTab={handleSubTabSelect}
             hospital={hospital}
             inventory={inventory}
             onUpdateInventory={updateInventoryUnit}
@@ -129,17 +108,15 @@ export default function App() {
         {/* PAGE 3: Voluntary Donor Dashboard ONLY (Strictly for authenticated donor accounts) */}
         {session.isAuthenticated && session.role === 'donor' && (
           <DonorDashboard
+            activeSubTab={activeSubTab}
+            onSelectSubTab={handleSubTabSelect}
             donor={donor}
             rewards={rewards}
             onRedeemReward={redeemVoucher}
             onUpdateSelfTest={updateDonorSelfTest}
             onAwardReferralPoints={awardReferralPoints}
             camps={camps}
-            onNavigateToChat={() => {
-              setActiveSubTab('bot');
-              const el = document.getElementById('bot-section');
-              el?.scrollIntoView({ behavior: 'smooth' });
-            }}
+            onNavigateToChat={() => handleSubTabSelect('bot')}
             liveBloodBanks={liveBloodBanks}
             liveDonors={liveDonors}
             onSwitchDonor={switchActiveDonor}

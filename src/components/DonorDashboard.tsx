@@ -7,8 +7,12 @@ import {
   IntegratedBloodBank,
   IntegratedDonor,
 } from '../types';
+import { HealthBotScreen } from './HealthBotScreen';
+import { HospitalLocationsMap } from './HospitalLocationsMap';
 
 interface DonorDashboardProps {
+  activeSubTab?: string;
+  onSelectSubTab?: (tab: string) => void;
   donor: DonorProfile;
   rewards: RewardVoucher[];
   onRedeemReward: (id: string) => { success: boolean; message: string; code?: string };
@@ -22,6 +26,8 @@ interface DonorDashboardProps {
 }
 
 export const DonorDashboard: React.FC<DonorDashboardProps> = ({
+  activeSubTab = 'pass',
+  onSelectSubTab,
   donor,
   rewards,
   onRedeemReward,
@@ -289,150 +295,165 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
     }
   };
 
+  const currentPage = ['pass', 'eligibility', 'centers', 'rewards', 'bot'].includes(activeSubTab)
+    ? activeSubTab
+    : 'pass';
+
+  if (currentPage === 'bot') {
+    return <HealthBotScreen donor={donor} />;
+  }
+
   return (
     <div className="flex flex-col w-full max-w-md mx-auto px-4 py-4 pb-28 gap-4">
-      {/* Donor Profile Quick Switcher bar */}
-      {liveDonors.length > 0 && onSwitchDonor && (
-        <div className="bg-white rounded-xl p-2.5 border border-slate-200/80 shadow-2xs flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="material-symbols-outlined text-[#b70011] text-[18px]">manage_accounts</span>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[11px] font-bold text-slate-800 truncate">
-                Active Donor: {donor.name} ({donor.bloodGroup})
-              </span>
-              <span className="text-[10px] text-slate-500 truncate">
-                {liveDonors.length} registered donors loaded from Supabase
-              </span>
+      {/* PAGE 1: E-PASS & PROFILE */}
+      {currentPage === 'pass' && (
+        <>
+          {/* Donor Profile Quick Switcher bar */}
+          {liveDonors.length > 0 && onSwitchDonor && (
+            <div className="bg-white rounded-xl p-2.5 border border-slate-200/80 shadow-2xs flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="material-symbols-outlined text-[#b70011] text-[18px]">manage_accounts</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[11px] font-bold text-slate-800 truncate">
+                    Active Donor: {donor.name} ({donor.bloodGroup})
+                  </span>
+                  <span className="text-[10px] text-slate-500 truncate">
+                    {liveDonors.length} registered voluntary donors
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDonorSelector(true)}
+                className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-[#b70011] border border-red-200 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap flex-shrink-0"
+              >
+                Switch Profile
+              </button>
             </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowDonorSelector(true)}
-            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-[#b70011] border border-red-200 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap flex-shrink-0"
+          )}
+
+          {/* Hero Profile & Digital e-Donor ID Card */}
+          <section
+            id="pass-section"
+            onClick={() => setShowPassModal(true)}
+            className="relative w-full rounded-2xl overflow-hidden shadow-xl bg-gradient-to-br from-[#b70011] via-[#dc2626] to-[#410002] text-white p-4 cursor-pointer active:scale-[0.99] transition-transform select-none"
           >
-            Switch Profile
-          </button>
-        </div>
+            {/* Background Watermark Pattern */}
+            <div className="absolute -right-8 -bottom-10 opacity-10 pointer-events-none select-none">
+              <svg fill="currentColor" height="220" viewBox="0 0 100 100" width="220">
+                <path d="M50 0 C50 0 20 40 20 65 A30 30 0 0 0 80 65 C80 40 50 0 50 0 Z"></path>
+              </svg>
+            </div>
+
+            {/* Chip & Pass Header */}
+            <div className="flex items-center justify-between relative z-10 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xs">
+                  <span className="material-symbols-outlined text-[18px]">contactless</span>
+                </div>
+                <div>
+                  <p className="text-[10px] text-white/80 uppercase tracking-widest font-semibold">
+                    National Donor Pass
+                  </p>
+                  <p className="font-display font-bold text-[14px] tracking-tight">{donor.donorCode}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full text-white text-[11px] font-semibold">
+                <span
+                  className="material-symbols-outlined text-[15px] text-[#85f8c4]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  verified
+                </span>
+                <span>{donor.badgeTier}</span>
+              </div>
+            </div>
+
+            {/* Central Donor Info */}
+            <div className="flex items-end justify-between relative z-10 my-2">
+              <div className="min-w-0 pr-2">
+                <span className="text-[11px] text-white/75 font-medium">Verified Life Saver</span>
+                <h2 className="font-display text-[24px] font-bold truncate leading-tight">{donor.name}</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[11px] font-medium">
+                    <span className="material-symbols-outlined text-[13px]">my_location</span>
+                    <span>{donor.city}</span>
+                  </span>
+                  <span className="text-[11px] text-white/85">Active Donor</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center bg-white text-[#b70011] p-2.5 rounded-xl shadow-md flex-shrink-0">
+                <span className="text-[10px] uppercase font-bold tracking-wider">Group</span>
+                <span className="font-display text-[26px] font-extrabold leading-none">{donor.bloodGroup}</span>
+              </div>
+            </div>
+
+            {/* Metrics Bar */}
+            <div className="grid grid-cols-2 gap-2 relative z-10 pt-3 mt-2 border-t border-white/15">
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs p-2 rounded-xl">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-[18px]">volunteer_activism</span>
+                </div>
+                <div>
+                  <p className="text-[10px] text-white/75">Total Given</p>
+                  <p className="font-display text-[15px] font-bold">{donor.totalDonations} Times</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs p-2 rounded-xl">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-[18px]">favorite</span>
+                </div>
+                <div>
+                  <p className="text-[10px] text-white/75">Lives Saved</p>
+                  <p className="font-display text-[15px] font-bold">{donor.livesSaved}+ Souls</p>
+                </div>
+              </div>
+            </div>
+
+            <p className="relative z-10 text-[10px] text-white/70 text-right mt-2 font-mono">
+              Tap to view QR & Pass Details →
+            </p>
+          </section>
+
+          {/* Live Points Widget & Fast Actions */}
+          <section className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="relative w-11 h-11 rounded-xl bg-red-50 text-[#b70011] flex items-center justify-center border border-red-100 flex-shrink-0">
+                <span className="material-symbols-outlined text-[24px]">toll</span>
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 text-white text-[8px] font-bold items-center justify-center">
+                    ✦
+                  </span>
+                </span>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Reward Reserve</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="font-display text-[22px] font-extrabold text-slate-900 tabular-nums">
+                    {donor.points.toLocaleString()}
+                  </span>
+                  <span className="text-[12px] font-bold text-[#b70011]">Pts</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onSelectSubTab && onSelectSubTab('rewards')}
+              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors text-[13px] font-semibold text-slate-800 flex items-center gap-1 border border-slate-200"
+            >
+              <span>Redeem</span>
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          </section>
+        </>
       )}
 
-      {/* Hero Profile & Digital e-Donor ID Card */}
-      <section
-        id="pass-section"
-        onClick={() => setShowPassModal(true)}
-        className="relative w-full rounded-2xl overflow-hidden shadow-xl bg-gradient-to-br from-[#b70011] via-[#dc2626] to-[#410002] text-white p-4 cursor-pointer active:scale-[0.99] transition-transform select-none"
-      >
-        {/* Background Watermark Pattern */}
-        <div className="absolute -right-8 -bottom-10 opacity-10 pointer-events-none select-none">
-          <svg fill="currentColor" height="220" viewBox="0 0 100 100" width="220">
-            <path d="M50 0 C50 0 20 40 20 65 A30 30 0 0 0 80 65 C80 40 50 0 50 0 Z"></path>
-          </svg>
-        </div>
-
-        {/* Chip & Pass Header */}
-        <div className="flex items-center justify-between relative z-10 mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xs">
-              <span className="material-symbols-outlined text-[18px]">contactless</span>
-            </div>
-            <div>
-              <p className="text-[10px] text-white/80 uppercase tracking-widest font-semibold">
-                National Donor Pass
-              </p>
-              <p className="font-display font-bold text-[14px] tracking-tight">{donor.donorCode}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full text-white text-[11px] font-semibold">
-            <span
-              className="material-symbols-outlined text-[15px] text-[#85f8c4]"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              verified
-            </span>
-            <span>{donor.badgeTier}</span>
-          </div>
-        </div>
-
-        {/* Central Donor Info */}
-        <div className="flex items-end justify-between relative z-10 my-2">
-          <div className="min-w-0 pr-2">
-            <span className="text-[11px] text-white/75 font-medium">Verified Life Saver</span>
-            <h2 className="font-display text-[24px] font-bold truncate leading-tight">{donor.name}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[11px] font-medium">
-                <span className="material-symbols-outlined text-[13px]">my_location</span>
-                <span>{donor.city}</span>
-              </span>
-              <span className="text-[11px] text-white/85">Active Donor</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center bg-white text-[#b70011] p-2.5 rounded-xl shadow-md flex-shrink-0">
-            <span className="text-[10px] uppercase font-bold tracking-wider">Group</span>
-            <span className="font-display text-[26px] font-extrabold leading-none">{donor.bloodGroup}</span>
-          </div>
-        </div>
-
-        {/* Metrics Bar */}
-        <div className="grid grid-cols-2 gap-2 relative z-10 pt-3 mt-2 border-t border-white/15">
-          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs p-2 rounded-xl">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-[18px]">volunteer_activism</span>
-            </div>
-            <div>
-              <p className="text-[10px] text-white/75">Total Given</p>
-              <p className="font-display text-[15px] font-bold">{donor.totalDonations} Times</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs p-2 rounded-xl">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-[18px]">favorite</span>
-            </div>
-            <div>
-              <p className="text-[10px] text-white/75">Lives Saved</p>
-              <p className="font-display text-[15px] font-bold">{donor.livesSaved}+ Souls</p>
-            </div>
-          </div>
-        </div>
-
-        <p className="relative z-10 text-[10px] text-white/70 text-right mt-2 font-mono">
-          Tap to view QR & Pass Details →
-        </p>
-      </section>
-
-      {/* Live Points Widget & Fast Actions */}
-      <section className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="relative w-11 h-11 rounded-xl bg-red-50 text-[#b70011] flex items-center justify-center border border-red-100 flex-shrink-0">
-            <span className="material-symbols-outlined text-[24px]">toll</span>
-            <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 text-white text-[8px] font-bold items-center justify-center">
-                ✦
-              </span>
-            </span>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Reward Reserve</p>
-            <div className="flex items-baseline gap-1">
-              <span className="font-display text-[22px] font-extrabold text-slate-900 tabular-nums">
-                {donor.points.toLocaleString()}
-              </span>
-              <span className="text-[12px] font-bold text-[#b70011]">Pts</span>
-            </div>
-          </div>
-        </div>
-
-        <a
-          href="#reward-store-section"
-          className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors text-[13px] font-semibold text-slate-800 flex items-center gap-1 border border-slate-200"
-        >
-          <span>Redeem</span>
-          <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-        </a>
-      </section>
-
-      {/* Eligibility Self-Test Wizard (Pre-Donation Medical Screen) */}
+      {/* PAGE 2: ELIGIBILITY SELF-TEST WIZARD */}
+      {currentPage === 'eligibility' && (
       <section id="eligibility-section" className="flex flex-col gap-3 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -634,145 +655,100 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
           </a>
         </div>
       </section>
+      )}
 
-      {/* Connected Walk-in Blood Centers (20 Facilities from Supabase) */}
-      <section id="centers-section" className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[#b70011] text-[20px]">pin_drop</span>
-            <h3 className="font-display font-bold text-[16px] text-[#0b1c30]">
-              Walk-In Blood Centers ({liveBloodBanks.length})
-            </h3>
-          </div>
-          <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-            Open For Donors
-          </span>
-        </div>
-        <p className="text-[12px] text-slate-500">
-          Find authorized blood banks in Chhattisgarh where you can walk in and donate today.
-        </p>
+      {/* PAGE 3: WALK-IN BLOOD CENTERS */}
+      {currentPage === 'centers' && (
+        <section id="centers-section" className="flex flex-col gap-3">
+          <HospitalLocationsMap bloodBanks={liveBloodBanks} />
+        </section>
+      )}
 
-        {/* District Filter Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-          {['All', 'Raipur', 'Bilaspur', 'Durg', 'Korba'].map((dist) => (
-            <button
-              key={dist}
-              type="button"
-              onClick={() => setCenterDistrict(dist)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
-                centerDistrict === dist
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
-            >
-              {dist}
-            </button>
-          ))}
-        </div>
-
-        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-          {liveBloodBanks
-            .filter((b) =>
-              centerDistrict === 'All'
-                ? true
-                : (b.district || b.city || '').toLowerCase().includes(centerDistrict.toLowerCase())
-            )
-            .map((b) => (
-              <div
-                key={b.id}
-                className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2"
-              >
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-display font-bold text-[13px] text-slate-900 truncate">
-                      {b.name}
-                    </span>
-                    {b.category && (
-                      <span className="bg-slate-200 text-slate-700 text-[9px] font-bold px-1.5 py-0.2 rounded">
-                        {b.category}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[10px] text-slate-500 truncate">{b.address}</span>
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <a
-                    href={`tel:${b.contactNumber}`}
-                    className="p-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg transition-colors"
-                    title="Call Blood Center"
-                  >
-                    <span className="material-symbols-outlined text-[15px]">call</span>
-                  </a>
-                  <a
-                    href={`https://maps.google.com/?q=${encodeURIComponent(b.name + ' ' + b.address)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg transition-colors"
-                    title="Get Directions"
-                  >
-                    <span className="material-symbols-outlined text-[15px]">directions</span>
-                  </a>
+      {/* PAGE 4: LIFESAVER REWARD STORE */}
+      {currentPage === 'rewards' && (
+        <>
+          <section className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="relative w-11 h-11 rounded-xl bg-red-50 text-[#b70011] flex items-center justify-center border border-red-100 flex-shrink-0">
+                <span className="material-symbols-outlined text-[24px]">toll</span>
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 text-white text-[8px] font-bold items-center justify-center">
+                    ✦
+                  </span>
+                </span>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Available Balance</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="font-display text-[22px] font-extrabold text-slate-900 tabular-nums">
+                    {donor.points.toLocaleString()}
+                  </span>
+                  <span className="text-[12px] font-bold text-[#b70011]">Pts</span>
                 </div>
               </div>
-            ))}
-        </div>
-      </section>
-
-      {/* LifeSaver Reward Store (Handwritten note requirement 5) */}
-      <section id="reward-store-section" className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-display font-bold text-[16px] text-slate-900">LifeSaver Reward Store</h3>
-            <p className="text-[11px] text-slate-500">Redeem points for healthcare vouchers & partner perks</p>
-          </div>
-          <span className="material-symbols-outlined text-slate-400">storefront</span>
-        </div>
-
-        <div className="grid grid-cols-1 gap-2.5">
-          {rewards.map((reward) => (
-            <div
-              key={reward.id}
-              className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between gap-3 hover:border-slate-300 transition-colors"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 flex-shrink-0">
-                  <span className="material-symbols-outlined text-[22px]">{reward.icon}</span>
-                </div>
-                <div className="min-w-0">
-                  <h4 className="font-display font-bold text-[13px] text-slate-900 truncate">
-                    {reward.title}
-                  </h4>
-                  <p className="text-[11px] text-slate-500 truncate">{reward.partner}</p>
-                  <div className="flex items-center gap-1 text-[#b70011] font-bold text-[12px] mt-0.5">
-                    <span className="material-symbols-outlined text-[14px]">toll</span>
-                    <span>{reward.pointsCost} Pts</span>
-                    {reward.code && (
-                      <span className="ml-2 font-mono text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
-                        {reward.code}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => handleRedeem(reward.id)}
-                disabled={reward.redeemed}
-                className={`px-3 py-2 rounded-xl text-[12px] font-semibold flex-shrink-0 transition-all active:scale-95 ${
-                  reward.redeemed
-                    ? 'bg-emerald-600 text-white cursor-default'
-                    : 'bg-slate-900 hover:bg-slate-800 text-white'
-                }`}
-              >
-                {reward.redeemed ? 'Redeemed' : 'Redeem'}
-              </button>
             </div>
-          ))}
-        </div>
-      </section>
+            <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-bold text-emerald-800">
+              {donor.badgeTier}
+            </span>
+          </section>
 
-      {/* Social Donor Badge Generator & Referral System (Handwritten note 7) */}
+          <section id="reward-store-section" className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-display font-bold text-[16px] text-slate-900">LifeSaver Reward Store</h3>
+                <p className="text-[11px] text-slate-500">Redeem points for healthcare vouchers & partner perks</p>
+              </div>
+              <span className="material-symbols-outlined text-slate-400">storefront</span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2.5">
+              {rewards.map((reward) => (
+                <div
+                  key={reward.id}
+                  className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between gap-3 hover:border-slate-300 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 flex-shrink-0">
+                      <span className="material-symbols-outlined text-[22px]">{reward.icon}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-display font-bold text-[13px] text-slate-900 truncate">
+                        {reward.title}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 truncate">{reward.partner}</p>
+                      <div className="flex items-center gap-1 text-[#b70011] font-bold text-[12px] mt-0.5">
+                        <span className="material-symbols-outlined text-[14px]">toll</span>
+                        <span>{reward.pointsCost} Pts</span>
+                        {reward.code && (
+                          <span className="ml-2 font-mono text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                            {reward.code}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleRedeem(reward.id)}
+                    disabled={reward.redeemed}
+                    className={`px-3 py-2 rounded-xl text-[12px] font-semibold flex-shrink-0 transition-all active:scale-95 ${
+                      reward.redeemed
+                        ? 'bg-emerald-600 text-white cursor-default'
+                        : 'bg-slate-900 hover:bg-slate-800 text-white'
+                    }`}
+                  >
+                    {reward.redeemed ? 'Redeemed' : 'Redeem'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* Social Donor Badge Generator & Referral System (Part of E-Pass Page) */}
+      {currentPage === 'pass' && (
       <section className="flex flex-col gap-3 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -855,137 +831,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
           </div>
         </div>
       </section>
-
-      {/* Multilingual AI Health Assistant Widget (BloodBot) */}
-      <section id="bot-section" className="flex flex-col gap-3 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-100">
-              <span className="material-symbols-outlined text-[18px]">smart_toy</span>
-            </div>
-            <div>
-              <h3 className="font-display font-bold text-[15px] text-slate-900">BloodBot AI</h3>
-              <div className="flex items-center gap-1 mt-0.5">
-                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
-                  ⚡ Free Model
-                </span>
-                <select
-                  value={freeModel}
-                  onChange={(e) => setFreeModel(e.target.value)}
-                  className="text-[10px] text-slate-700 bg-slate-50 border border-slate-200 rounded px-1 py-0.5 focus:outline-none"
-                >
-                  <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash (Free)</option>
-                  <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B (Free)</option>
-                  <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
-                  <option value="qwen/qwen-2.5-72b-instruct:free">Qwen 2.5 72B (Free)</option>
-                  <option value="deepseek/deepseek-r1:free">DeepSeek R1 (Free)</option>
-                  <option value="zero-cost-clinical-engine">Offline Free Engine</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Language Switcher */}
-          <div className="flex bg-slate-100 rounded-lg p-0.5 border border-slate-200/60">
-            {(['en', 'hi', 'hinglish'] as const).map((lang) => (
-              <button
-                key={lang}
-                onClick={() => setQuickBotLang(lang)}
-                className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${
-                  quickBotLang === lang
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                {lang === 'en' ? 'EN' : lang === 'hi' ? 'हिंदी' : 'Hinglish'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Chat Stream Dialog Card */}
-        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 flex flex-col gap-2 max-h-56 overflow-y-auto">
-          {botMessages.map((m, idx) => (
-            <div
-              key={idx}
-              className={`flex items-start gap-2 ${
-                m.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
-            >
-              {m.role === 'bot' && (
-                <div className="w-6 h-6 rounded-full bg-[#b70011] text-white flex items-center justify-center flex-shrink-0 text-[11px]">
-                  🤖
-                </div>
-              )}
-              <div
-                className={`p-2.5 rounded-xl text-[12px] leading-relaxed max-w-[85%] ${
-                  m.role === 'user'
-                    ? 'bg-[#b70011] text-white rounded-tr-none'
-                    : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-none shadow-xs'
-                }`}
-              >
-                <p className="whitespace-pre-wrap">{m.text}</p>
-              </div>
-            </div>
-          ))}
-          {isBotLoading && (
-            <div className="flex items-center gap-2 text-[11px] text-slate-400 pl-8">
-              <span className="w-3 h-3 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></span>
-              <span>BloodBot is typing medical guidance...</span>
-            </div>
-          )}
-        </div>
-
-        {/* Suggested Quick Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {[
-            'Can I donate after tattoo?',
-            'Hemoglobin kaise badhaye?',
-            'Next blood camp nearby',
-            'Pre-donation food guide',
-          ].map((chip) => (
-            <button
-              key={chip}
-              onClick={() => {
-                setQuickInput(chip);
-              }}
-              className="px-2.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-medium whitespace-nowrap transition-colors"
-            >
-              {chip}
-            </button>
-          ))}
-        </div>
-
-        {/* Chat Input Box */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 flex items-center bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-            <input
-              type="text"
-              value={quickInput}
-              onChange={(e) => setQuickInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleQuickSend()}
-              placeholder="Ask BloodBot medical question..."
-              className="w-full bg-transparent text-slate-900 placeholder:text-slate-400 text-[13px] focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={onNavigateToChat}
-              title="Open Full Screen Health Bot"
-              className="text-slate-400 hover:text-slate-700 p-1"
-            >
-              <span className="material-symbols-outlined text-[19px]">open_in_full</span>
-            </button>
-          </div>
-
-          <button
-            onClick={handleQuickSend}
-            disabled={isBotLoading}
-            className="w-10 h-10 bg-[#b70011] hover:bg-red-700 text-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-xs transition-colors"
-          >
-            <span className="material-symbols-outlined text-[19px]">send</span>
-          </button>
-        </div>
-      </section>
+      )}
 
       {/* Modal: Digital Pass & QR Code */}
       {showPassModal && (

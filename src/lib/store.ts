@@ -231,7 +231,9 @@ export function useBloodConnectStore() {
   });
 
   // Current active sub-tab within the role-specific dashboard
-  const [activeSubTab, setActiveSubTab] = useState<string>('inventory');
+  const [activeSubTab, setActiveSubTab] = useState<string>(() => {
+    return localStorage.getItem('bc_active_subtab') || 'inventory';
+  });
 
   const [inventory, setInventory] = useState<BloodStockItem[]>(() => {
     const saved = localStorage.getItem('bc_inventory');
@@ -362,6 +364,13 @@ export function useBloodConnectStore() {
     };
     setSession(newSession);
     setActiveRole(role);
+    setActiveSubTab((prev) => {
+      const validTabs =
+        role === 'hospital'
+          ? ['inventory', 'broadcast', 'facilities', 'registry', 'camps']
+          : ['pass', 'eligibility', 'centers', 'rewards', 'bot'];
+      return validTabs.includes(prev) ? prev : role === 'hospital' ? 'inventory' : 'pass';
+    });
     localStorage.setItem('bc_session', JSON.stringify(newSession));
     localStorage.setItem('bc_user_role', role);
 

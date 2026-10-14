@@ -15,6 +15,8 @@ import { RegisterDonorModal } from './RegisterDonorModal';
 import { RegisterHospitalModal } from './RegisterHospitalModal';
 
 interface HospitalDashboardProps {
+  activeSubTab?: string;
+  onSelectSubTab?: (tab: string) => void;
   hospital: HospitalProfile;
   inventory: BloodStockItem[];
   onUpdateInventory: (group: string, delta: number) => void;
@@ -31,6 +33,8 @@ interface HospitalDashboardProps {
 }
 
 export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
+  activeSubTab = 'inventory',
+  onSelectSubTab,
   hospital,
   inventory,
   onUpdateInventory,
@@ -210,201 +214,242 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
     return matchGrp && matchQ;
   });
 
+  const currentPage = ['inventory', 'broadcast', 'facilities', 'registry', 'camps'].includes(
+    activeSubTab
+  )
+    ? activeSubTab
+    : 'inventory';
+
   return (
     <div className="flex flex-col w-full max-w-md mx-auto px-4 py-4 pb-28 gap-4">
-      {/* Top Hospital Info Header */}
-      <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-12 h-12 rounded-xl bg-red-50 text-[#b70011] border border-red-100 flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-[28px]">local_hospital</span>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h1 className="font-display font-bold text-[16px] text-[#0b1c30] truncate">
-                  {hospital.name}
-                </h1>
-                <span
-                  className="material-symbols-outlined text-emerald-600 text-[18px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                  title="Verified Clinical Facility"
-                >
-                  verified
-                </span>
-              </div>
-              <p className="text-[12px] text-slate-500 truncate">
-                {hospital.licenseNumber} • {hospital.zoneHub}
-              </p>
-            </div>
-          </div>
-
-          <div className="relative flex-shrink-0">
-            <button
-              onClick={() => showToast('3 active regional cross-match alerts pending')}
-              aria-label="Facility alerts"
-              className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 hover:bg-slate-200 transition-colors"
-            >
-              <span className="material-symbols-outlined text-[20px]">notifications_active</span>
-            </button>
-            <span className="absolute -top-1 -right-1 bg-[#b70011] text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-xs">
-              3
-            </span>
-          </div>
-        </div>
-
-        {/* Action Row */}
-        <div className="flex items-center gap-2 pt-1">
-          <button
-            onClick={() => {
-              const el = document.getElementById('broadcast-creator-section');
-              el?.scrollIntoView({ behavior: 'smooth' });
-              showToast('Scrolled to Emergency Broadcast Form');
-            }}
-            className="flex-1 bg-[#b70011] hover:bg-red-700 text-white text-[13px] font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-xs active:scale-[0.98] transition-all"
-          >
-            <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
-            </span>
-            <span className="tracking-wide">Emergency Broadcast</span>
-          </button>
-
-          <button
-            onClick={() => {
-              showToast('API Network Sync: Connected to Supabase National Life Grid');
-            }}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-[13px] font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
-          >
-            <span className="material-symbols-outlined text-[18px]">share</span>
-            <span>Sync API</span>
-          </button>
-        </div>
-      </section>
-
-      {/* Key Metrics Strip */}
-      <section className="grid grid-cols-3 gap-2">
-        <div className="bg-white rounded-xl p-3 border border-slate-200/80 flex flex-col items-center justify-center text-center shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500">Total Stock</span>
-          <span className="font-display font-extrabold text-[22px] text-[#0b1c30] mt-0.5 tabular-nums">
-            {hospital.totalStock}
-          </span>
-          <span className="text-[11px] font-medium text-emerald-600">Units Ready</span>
-        </div>
-
-        <div className="bg-white rounded-xl p-3 border border-slate-200/80 flex flex-col items-center justify-center text-center shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500">Expiring &lt;7d</span>
-          <span className="font-display font-extrabold text-[22px] text-[#b70011] mt-0.5 tabular-nums">
-            {hospital.expiring7d}
-          </span>
-          <span className="text-[11px] font-medium text-red-600">Priority Use</span>
-        </div>
-
-        <div className="bg-white rounded-xl p-3 border border-slate-200/80 flex flex-col items-center justify-center text-center shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500">Requests</span>
-          <span className="font-display font-extrabold text-[22px] text-[#0b1c30] mt-0.5 tabular-nums">
-            {hospital.pendingRequests}
-          </span>
-          <span className="text-[11px] font-bold text-[#b70011]">Pending</span>
-        </div>
-      </section>
-
-      {/* Dynamic Blood Inventory Matrix */}
-      <section id="inventory-section" className="flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[#b70011] text-[20px]">inventory_2</span>
-            <h2 className="font-display font-bold text-[16px] text-[#0b1c30]">Live Blood Inventory</h2>
-          </div>
-          <span className="text-[11px] text-slate-400">Updated 2m ago</span>
-        </div>
-
-        {/* RLS Security Notice */}
-        <div className="px-3 py-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200/60 text-[11px] text-emerald-800 flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-[15px] text-emerald-600">verified_user</span>
-          <span>
-            <strong>Row-Level Security (RLS) active:</strong> You are authorized to edit AIIMS Raipur stock only.
-          </span>
-        </div>
-
-        {/* 2x4 Interactive Card Grid */}
-        <div className="grid grid-cols-2 gap-2.5">
-          {inventory.map((item) => {
-            const isCritical = item.status === 'Critical';
-            const isLow = item.status === 'Low';
-            const isStable = item.status === 'Stable';
-
-            return (
-              <div
-                key={item.group}
-                className="bg-white rounded-xl p-3 border border-slate-200/80 shadow-xs flex flex-col justify-between gap-2.5 hover:border-slate-300 transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <span className="font-display font-extrabold text-[24px] text-[#0b1c30] leading-none">
-                    {item.group}
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${
-                      isCritical
-                        ? 'bg-red-600 text-white'
-                        : isLow
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-emerald-100 text-emerald-800'
-                    }`}
-                  >
-                    {isCritical && <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>}
-                    {item.status}
-                  </span>
+      {/* PAGE 1: INVENTORY & OVERVIEW */}
+      {currentPage === 'inventory' && (
+        <>
+          {/* Top Hospital Info Header */}
+          <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-12 rounded-xl bg-red-50 text-[#b70011] border border-red-100 flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-[28px]">local_hospital</span>
                 </div>
-
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-[12px] text-slate-500">In Reserve</span>
-                    <span className="font-display font-extrabold text-[18px] text-[#0b1c30] tabular-nums">
-                      {item.units} <span className="text-[11px] font-normal text-slate-400">U</span>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h1 className="font-display font-bold text-[16px] text-[#0b1c30] truncate">
+                      {hospital.name}
+                    </h1>
+                    <span
+                      className="material-symbols-outlined text-emerald-600 text-[18px]"
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                      title="Verified Clinical Facility"
+                    >
+                      verified
                     </span>
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        isCritical ? 'bg-[#b70011]' : isLow ? 'bg-amber-500' : 'bg-emerald-600'
-                      }`}
-                      style={{ width: `${Math.max(6, item.percentage)}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Adjust +/- buttons */}
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
-                  <button
-                    onClick={() => {
-                      onUpdateInventory(item.group, -1);
-                      showToast(`${item.group} decremented by 1 Unit`);
-                    }}
-                    className="flex-1 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-lg active:scale-95 transition-all"
-                  >
-                    −
-                  </button>
-                  <button
-                    onClick={() => {
-                      onUpdateInventory(item.group, 1);
-                      showToast(`${item.group} incremented by 1 Unit`);
-                    }}
-                    className="flex-1 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-lg active:scale-95 transition-all"
-                  >
-                    +
-                  </button>
+                  <p className="text-[12px] text-slate-500 truncate">
+                    {hospital.licenseNumber} • {hospital.zoneHub}
+                  </p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </section>
 
-      {/* Emergency Blood Request Creator Module (AI-Powered) */}
-      <section
-        id="broadcast-creator-section"
-        className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3.5"
-      >
+              <div className="relative flex-shrink-0">
+                <button
+                  onClick={() => showToast('3 active regional cross-match alerts pending')}
+                  aria-label="Facility alerts"
+                  className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 hover:bg-slate-200 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[20px]">notifications_active</span>
+                </button>
+                <span className="absolute -top-1 -right-1 bg-[#b70011] text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-xs">
+                  3
+                </span>
+              </div>
+            </div>
+
+            {/* Action Row */}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => {
+                  if (onSelectSubTab) {
+                    onSelectSubTab('broadcast');
+                  }
+                }}
+                className="flex-1 bg-[#b70011] hover:bg-red-700 text-white text-[13px] font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-xs active:scale-[0.98] transition-all"
+              >
+                <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+                </span>
+                <span className="tracking-wide">Emergency Broadcast</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  showToast('API Network Sync: Connected to National Life Grid');
+                }}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-[13px] font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
+              >
+                <span className="material-symbols-outlined text-[18px]">share</span>
+                <span>Sync API</span>
+              </button>
+            </div>
+          </section>
+
+          {/* Key Metrics Strip */}
+          <section className="grid grid-cols-3 gap-2">
+            <div className="bg-white rounded-xl p-3 border border-slate-200/80 flex flex-col items-center justify-center text-center shadow-xs">
+              <span className="text-[11px] font-semibold text-slate-500">Total Stock</span>
+              <span className="font-display font-extrabold text-[22px] text-[#0b1c30] mt-0.5 tabular-nums">
+                {hospital.totalStock}
+              </span>
+              <span className="text-[11px] font-medium text-emerald-600">Units Ready</span>
+            </div>
+
+            <div className="bg-white rounded-xl p-3 border border-slate-200/80 flex flex-col items-center justify-center text-center shadow-xs">
+              <span className="text-[11px] font-semibold text-slate-500">Expiring &lt;7d</span>
+              <span className="font-display font-extrabold text-[22px] text-[#b70011] mt-0.5 tabular-nums">
+                {hospital.expiring7d}
+              </span>
+              <span className="text-[11px] font-medium text-red-600">Priority Use</span>
+            </div>
+
+            <div className="bg-white rounded-xl p-3 border border-slate-200/80 flex flex-col items-center justify-center text-center shadow-xs">
+              <span className="text-[11px] font-semibold text-slate-500">Requests</span>
+              <span className="font-display font-extrabold text-[22px] text-[#0b1c30] mt-0.5 tabular-nums">
+                {hospital.pendingRequests}
+              </span>
+              <span className="text-[11px] font-bold text-[#b70011]">Pending</span>
+            </div>
+          </section>
+
+          {/* Dynamic Blood Inventory Matrix */}
+          <section id="inventory-section" className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[#b70011] text-[20px]">inventory_2</span>
+                <h2 className="font-display font-bold text-[16px] text-[#0b1c30]">Live Blood Inventory</h2>
+              </div>
+              <span className="text-[11px] text-slate-400">Updated 2m ago</span>
+            </div>
+
+            {/* RLS Security Notice */}
+            <div className="px-3 py-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200/60 text-[11px] text-emerald-800 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[15px] text-emerald-600">verified_user</span>
+              <span>
+                <strong>Row-Level Security (RLS) active:</strong> You are authorized to edit {hospital.name} stock only.
+              </span>
+            </div>
+
+            {/* 2x4 Interactive Card Grid */}
+            <div className="grid grid-cols-2 gap-2.5">
+              {inventory.map((item) => {
+                const isCritical = item.status === 'Critical';
+                const isLow = item.status === 'Low';
+
+                return (
+                  <div
+                    key={item.group}
+                    className="bg-white rounded-xl p-3 border border-slate-200/80 shadow-xs flex flex-col justify-between gap-2.5 hover:border-slate-300 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <span className="font-display font-extrabold text-[24px] text-[#0b1c30] leading-none">
+                        {item.group}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${
+                          isCritical
+                            ? 'bg-red-600 text-white'
+                            : isLow
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {isCritical && <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>}
+                        {item.status}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-[12px] text-slate-500">In Reserve</span>
+                        <span className="font-display font-extrabold text-[18px] text-[#0b1c30] tabular-nums">
+                          {item.units} <span className="text-[11px] font-normal text-slate-400">U</span>
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-1.5 rounded-full transition-all duration-300 ${
+                            isCritical ? 'bg-[#b70011]' : isLow ? 'bg-amber-500' : 'bg-emerald-600'
+                          }`}
+                          style={{ width: `${Math.max(6, item.percentage)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    {/* Adjust +/- buttons */}
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                      <button
+                        onClick={() => {
+                          onUpdateInventory(item.group, -1);
+                          showToast(`${item.group} decremented by 1 Unit`);
+                        }}
+                        className="flex-1 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-lg active:scale-95 transition-all"
+                      >
+                        −
+                      </button>
+                      <button
+                        onClick={() => {
+                          onUpdateInventory(item.group, 1);
+                          showToast(`${item.group} incremented by 1 Unit`);
+                        }}
+                        className="flex-1 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-lg active:scale-95 transition-all"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Critical Logistics Feed */}
+          <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display font-bold text-[15px] text-[#0b1c30]">Critical Logistics Feed</h2>
+              <span className="text-[11px] text-slate-400">Network Status: Live</span>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                  <span className="text-[12px] text-slate-800 truncate">
+                    Apollo Bilaspur accepted cross-match dispatch
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400 flex-shrink-0">8m ago</span>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-[#b70011] flex-shrink-0"></span>
+                  <span className="text-[12px] text-slate-800 truncate">
+                    Auto-alert: 3 Units O- depleted for OR 2
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400 flex-shrink-0">21m ago</span>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* PAGE 2: EMERGENCY BROADCAST (SOS ALERT) */}
+      {currentPage === 'broadcast' && (
+        <section
+          id="broadcast-creator-section"
+          className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3.5"
+        >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="material-symbols-outlined text-[#b70011] text-[22px]">emergency</span>
@@ -646,8 +691,10 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
           </button>
         </div>
       </section>
+      )}
 
-      {/* Cross-Hospital Network Blood Availability & 20 Connected Supabase Facilities */}
+      {/* PAGE 3: REGIONAL FACILITIES & GRID (20 BANKS) */}
+      {currentPage === 'facilities' && (
       <section id="grid-section" className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -759,8 +806,10 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
           </>
         )}
       </section>
+      )}
 
-      {/* Voluntary Donors Registry (1,000 Real Records from Supabase) */}
+      {/* PAGE 4: VOLUNTARY DONORS REGISTRY (1K DONORS) */}
+      {currentPage === 'registry' && (
       <section id="registry-section" className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-1.5">
@@ -819,8 +868,8 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
         </div>
 
         {/* Donors List */}
-        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-          {filteredRegistryDonors.slice(0, 15).map((d) => (
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+          {filteredRegistryDonors.slice(0, 25).map((d) => (
             <div
               key={d.id}
               className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2"
@@ -871,17 +920,19 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
               </div>
             </div>
           ))}
-          {filteredRegistryDonors.length > 15 && (
+          {filteredRegistryDonors.length > 25 && (
             <div className="text-center pt-1.5">
               <span className="text-[11px] font-semibold text-slate-500">
-                Showing 15 of {filteredRegistryDonors.length} matching voluntary donors from Supabase
+                Showing 25 of {filteredRegistryDonors.length} matching voluntary donors
               </span>
             </div>
           )}
         </div>
       </section>
+      )}
 
-      {/* Blood Donation Camp & Event Manager */}
+      {/* PAGE 5: BLOOD DONATION CAMP & EVENT MANAGER (DRIVES) */}
+      {currentPage === 'camps' && (
       <section id="drives-section" className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -964,36 +1015,21 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
           <span>Schedule New Regional Camp</span>
         </button>
       </section>
+      )}
 
-      {/* Critical Logistics Feed */}
-      <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display font-bold text-[15px] text-[#0b1c30]">Critical Logistics Feed</h2>
-          <span className="text-[11px] text-slate-400">Network Status: Live</span>
-        </div>
+      {/* Modal: Register Donor */}
+      <RegisterDonorModal
+        isOpen={showRegisterDonorModal}
+        onClose={() => setShowRegisterDonorModal(false)}
+        onDonorRegistered={handleDonorRegistered}
+      />
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
-              <span className="text-[12px] text-slate-800 truncate">
-                Apollo Bilaspur accepted cross-match dispatch
-              </span>
-            </div>
-            <span className="text-[11px] text-slate-400 flex-shrink-0">8m ago</span>
-          </div>
-
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-[#b70011] flex-shrink-0"></span>
-              <span className="text-[12px] text-slate-800 truncate">
-                Auto-alert: 3 Units O- depleted for OR 2
-              </span>
-            </div>
-            <span className="text-[11px] text-slate-400 flex-shrink-0">21m ago</span>
-          </div>
-        </div>
-      </section>
+      {/* Modal: Register Hospital */}
+      <RegisterHospitalModal
+        isOpen={showRegisterHospitalModal}
+        onClose={() => setShowRegisterHospitalModal(false)}
+        onHospitalRegistered={handleHospitalRegistered}
+      />
 
       {/* Modal: Schedule Camp */}
       {showScheduleModal && (

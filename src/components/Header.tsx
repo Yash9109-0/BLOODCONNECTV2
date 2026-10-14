@@ -72,17 +72,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Zone 2 & 3: Actions, Portal Badge, and Logout */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Supabase Status Pill */}
-            {supabaseConnected && (
-              <div
-                title="Connected to Supabase: 1,000 Donors, 20 Blood Banks"
-                className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-bold text-emerald-800"
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Supabase Live</span>
-              </div>
-            )}
-
             {/* Authenticated User Status or Role Badge */}
             {isAuthenticated && (
               <>
