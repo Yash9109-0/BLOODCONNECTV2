@@ -12,6 +12,7 @@ import {
 import { HealthBotScreen } from './HealthBotScreen';
 import { HospitalLocationsMap } from './HospitalLocationsMap';
 import { BloodCompatibilityFinder } from './BloodCompatibilityFinder';
+import { Leaderboard } from './Leaderboard';
 export interface StoredCoupon {
   id: string;
   title: string;
@@ -24,6 +25,109 @@ export interface StoredCoupon {
   icon?: string;
   active?: boolean;
   created_at?: string;
+}
+
+export interface BadgeTierConfig {
+  tier: 'Bronze' | 'Silver' | 'Gold';
+  title: string;
+  subtitle: string;
+  minDonations: number;
+  nextTier: string | null;
+  targetDonations: number;
+  progressPercent: number;
+  donationsToNext: number;
+  bgGradient: string;
+  cardBorder: string;
+  badgeGlow: string;
+  textColor: string;
+  pillBg: string;
+  emblemGradient: string;
+  emblemIcon: string;
+  bannerTag: string;
+  perks: string[];
+}
+
+export function getDonorBadgeTier(donationCount: number): BadgeTierConfig {
+  const count = Math.max(0, donationCount || 0);
+
+  if (count >= 5) {
+    return {
+      tier: 'Gold',
+      title: 'Gold Hero',
+      subtitle: 'Elite Master Voluntary Lifesaver',
+      minDonations: 5,
+      nextTier: null,
+      targetDonations: 5,
+      progressPercent: 100,
+      donationsToNext: 0,
+      bgGradient: 'from-amber-950 via-slate-950 to-yellow-950',
+      cardBorder: 'border-amber-400/80 shadow-amber-500/25 shadow-xl',
+      badgeGlow: 'bg-amber-400/20 text-amber-300 border-amber-400/50',
+      textColor: 'text-amber-300',
+      pillBg: 'bg-amber-500/20 text-amber-200 border-amber-400/40',
+      emblemGradient: 'from-amber-300 via-yellow-400 to-amber-600',
+      emblemIcon: 'workspace_premium',
+      bannerTag: '🏆 TOP 5% NATIONWIDE DONOR',
+      perks: [
+        'VIP Golden-Hour Emergency Alerts',
+        'Hospital Fast-Track Priority Pass',
+        'Annual Full-Body Health Checkups',
+        'Official State LifeSaver Honor Roll',
+      ],
+    };
+  }
+
+  if (count >= 3) {
+    return {
+      tier: 'Silver',
+      title: 'Silver Guardian',
+      subtitle: 'Dedicated Regional Blood Guardian',
+      minDonations: 3,
+      nextTier: 'Gold Hero',
+      targetDonations: 5,
+      progressPercent: Math.min(100, Math.round(((count - 3) / 2) * 100)),
+      donationsToNext: Math.max(0, 5 - count),
+      bgGradient: 'from-slate-900 via-slate-800 to-slate-950',
+      cardBorder: 'border-slate-300/80 shadow-slate-400/20 shadow-xl',
+      badgeGlow: 'bg-slate-300/20 text-slate-100 border-slate-300/50',
+      textColor: 'text-slate-200',
+      pillBg: 'bg-slate-300/20 text-slate-100 border-slate-300/40',
+      emblemGradient: 'from-slate-100 via-slate-300 to-slate-400',
+      emblemIcon: 'shield',
+      bannerTag: '🥈 DISTINGUISHED GUARDIAN',
+      perks: [
+        'Priority Emergency SOS Notifications',
+        'Free Diagnostic CBC Screening',
+        '+150 Pts Referral Multiplier',
+        'Blood Bank Express Pass',
+      ],
+    };
+  }
+
+  return {
+    tier: 'Bronze',
+    title: 'Bronze Lifesaver',
+    subtitle: 'Committed Voluntary Life Supporter',
+    minDonations: 1,
+    nextTier: 'Silver Guardian',
+    targetDonations: 3,
+    progressPercent: Math.min(100, Math.round((count / 3) * 100)),
+    donationsToNext: Math.max(1, 3 - count),
+    bgGradient: 'from-[#2e150d] via-[#3a1b10] to-[#1f0e09]',
+    cardBorder: 'border-amber-700/80 shadow-orange-950/20 shadow-xl',
+    badgeGlow: 'bg-amber-700/20 text-amber-300 border-amber-600/50',
+    textColor: 'text-amber-400',
+    pillBg: 'bg-amber-700/20 text-amber-300 border-amber-600/40',
+    emblemGradient: 'from-amber-500 via-amber-600 to-amber-800',
+    emblemIcon: 'stars',
+    bannerTag: '🥉 VERIFIED VOLUNTARY DONOR',
+    perks: [
+      'National Voluntary Registry E-Pass',
+      'Quarterly Clinical Health Tracker',
+      'LifeSaver Reward Store Access',
+      'Emergency WhatsApp & SMS Alerts',
+    ],
+  };
 }
 
 interface DonorDashboardProps {
@@ -151,6 +255,30 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
     remainingPoints: number;
   } | null>(null);
   const [copiedCouponCode, setCopiedCouponCode] = useState<string | null>(null);
+
+  // Badge Card & Share Badge state
+  const [showShareBadgeModal, setShowShareBadgeModal] = useState<boolean>(false);
+  const [badgeShareCopied, setBadgeShareCopied] = useState<boolean>(false);
+
+  const currentBadgeTier = getDonorBadgeTier(donor.totalDonations);
+  const donorReferralCode = donor.donorCode || donor.referralCode || 'BC-HERO';
+  const donorReferralUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://bloodconnect.in'}/?ref=${encodeURIComponent(donorReferralCode)}`;
+  const donorShareMessage = `🩸 I am a proud ${currentBadgeTier.title} on Blood-Connect with ${donor.totalDonations} voluntary blood donations saving ${donor.totalDonations * 3 || donor.livesSaved}+ lives! Join our lifesaver network to respond to emergency requests. Register with my donor code "${donorReferralCode}" or click here: ${donorReferralUrl}`;
+
+  const handleShareBadgeClick = () => {
+    onAwardReferralPoints();
+    setShowShareBadgeModal(true);
+    showToast('🎁 Badge ready to share! +150 Points awarded.');
+  };
+
+  const handleCopyBadgeShare = (textToCopy: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(textToCopy);
+    }
+    setBadgeShareCopied(true);
+    showToast('📋 Life Saver Badge & referral invite copied!');
+    setTimeout(() => setBadgeShareCopied(false), 2500);
+  };
 
   // Fetch coupons from /api/coupons and existing redemptions from /api/redemptions
   const loadCouponsAndRedemptions = async () => {
@@ -777,7 +905,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
         ...prev,
         {
           role: 'bot',
-          text: 'Thank you for asking! Remember to drink plenty of fluids and maintain high-protein, iron-rich meals before your donation.\n\n⚠️ Disclaimer: Not professional medical diagnosis.',
+          text: 'Thank you for asking! Remember to drink plenty of fluids and maintain high-protein, iron-rich meals before your donation.\n\n⚠️ This is not medical advice, please ask a doctor.',
         },
       ]);
     } finally {
@@ -966,7 +1094,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className={isFullPage ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5' : 'flex flex-col gap-3'}>
             {filteredRequests.map((req) => {
               const isMatchingDonor = req.bloodGroup === donor.bloodGroup;
               const isPledged = Boolean(pledgedDonations[req.id]);
@@ -1151,6 +1279,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
     'eligibility',
     'centers',
     'rewards',
+    'leaderboard',
     'bot',
   ].includes(activeSubTab)
     ? activeSubTab
@@ -1161,10 +1290,10 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
   }
 
   return (
-    <div className="flex flex-col w-full max-w-md mx-auto px-4 py-4 pb-28 gap-4">
+    <div className="flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 gap-6">
       {/* PAGE 1: E-PASS & PROFILE */}
       {currentPage === 'pass' && (
-        <>
+        <div className="flex flex-col gap-5">
           {/* Donor Profile Quick Switcher bar */}
           {liveDonors.length > 0 && onSwitchDonor && (
             <div className="bg-white rounded-xl p-2.5 border border-slate-200/80 shadow-2xs flex items-center justify-between gap-2">
@@ -1189,275 +1318,522 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
             </div>
           )}
 
-          {/* Hero Profile & Digital e-Donor ID Card */}
-          <section
-            id="pass-section"
-            onClick={() => setShowPassModal(true)}
-            className="relative w-full rounded-2xl overflow-hidden shadow-xl bg-gradient-to-br from-[#b70011] via-[#dc2626] to-[#410002] text-white p-4 cursor-pointer active:scale-[0.99] transition-transform select-none"
-          >
-            {/* Background Watermark Pattern */}
-            <div className="absolute -right-8 -bottom-10 opacity-10 pointer-events-none select-none">
-              <svg fill="currentColor" height="220" viewBox="0 0 100 100" width="220">
-                <path d="M50 0 C50 0 20 40 20 65 A30 30 0 0 0 80 65 C80 40 50 0 50 0 Z"></path>
-              </svg>
-            </div>
+          {/* 2-Column Responsive Layout on Desktop */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column (5 cols on lg): Hero Pass Card, Leaderboard Callout, QR Verification Pass */}
+            <div className="lg:col-span-5 flex flex-col gap-4">
+              {/* Hero Profile & Digital e-Donor ID Card */}
+              <section
+                id="pass-section"
+                onClick={() => setShowPassModal(true)}
+                className="relative w-full rounded-2xl overflow-hidden shadow-xl bg-gradient-to-br from-[#b70011] via-[#dc2626] to-[#410002] text-white p-4 cursor-pointer active:scale-[0.99] transition-transform select-none"
+              >
+                {/* Background Watermark Pattern */}
+                <div className="absolute -right-8 -bottom-10 opacity-10 pointer-events-none select-none">
+                  <svg fill="currentColor" height="220" viewBox="0 0 100 100" width="220">
+                    <path d="M50 0 C50 0 20 40 20 65 A30 30 0 0 0 80 65 C80 40 50 0 50 0 Z"></path>
+                  </svg>
+                </div>
 
-            {/* Chip & Pass Header */}
-            <div className="flex items-center justify-between relative z-10 mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xs">
-                  <span className="material-symbols-outlined text-[18px]">contactless</span>
-                </div>
-                <div>
-                  <p className="text-[10px] text-white/80 uppercase tracking-widest font-semibold">
-                    National Donor Pass
-                  </p>
-                  <p className="font-display font-bold text-[14px] tracking-tight">{donor.donorCode}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full text-white text-[11px] font-semibold">
-                <span
-                  className="material-symbols-outlined text-[15px] text-[#85f8c4]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  verified
-                </span>
-                <span>{donor.badgeTier}</span>
-              </div>
-            </div>
-
-            {/* Central Donor Info */}
-            <div className="flex items-end justify-between relative z-10 my-2">
-              <div className="min-w-0 pr-2">
-                <span className="text-[11px] text-white/75 font-medium">Verified Life Saver</span>
-                <h2 className="font-display text-[24px] font-bold truncate leading-tight">{donor.name}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[11px] font-medium">
-                    <span className="material-symbols-outlined text-[13px]">my_location</span>
-                    <span>{donor.city}</span>
-                  </span>
-                  <span className="text-[11px] text-white/85">Active Donor</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col items-center bg-white text-[#b70011] p-2.5 rounded-xl shadow-md flex-shrink-0">
-                <span className="text-[10px] uppercase font-bold tracking-wider">Group</span>
-                <span className="font-display text-[26px] font-extrabold leading-none">{donor.bloodGroup}</span>
-              </div>
-            </div>
-
-            {/* Metrics Bar */}
-            <div className="grid grid-cols-2 gap-2 relative z-10 pt-3 mt-2 border-t border-white/15">
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs p-2 rounded-xl">
-                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[18px]">volunteer_activism</span>
-                </div>
-                <div>
-                  <p className="text-[10px] text-white/75">Total Given</p>
-                  <p className="font-display text-[15px] font-bold">{donor.totalDonations} Times</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs p-2 rounded-xl">
-                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[18px]">favorite</span>
-                </div>
-                <div>
-                  <p className="text-[10px] text-white/75">Lives Saved</p>
-                  <p className="font-display text-[15px] font-bold">{donor.livesSaved}+ Souls</p>
-                </div>
-              </div>
-            </div>
-
-            <p className="relative z-10 text-[10px] text-white/70 text-right mt-2 font-mono">
-              Tap to view Full Digital Pass Card →
-            </p>
-          </section>
-
-          {/* Clinical Donation Token & Dynamic QR Section */}
-          <section className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-red-50 text-[#b70011] flex items-center justify-center border border-red-100 flex-shrink-0">
-                  <span className="material-symbols-outlined text-[20px]">qr_code_scanner</span>
-                </div>
-                <div>
-                  <h3 className="font-display font-bold text-[15px] text-slate-900 flex items-center gap-2">
-                    <span>Donation Verification Pass</span>
-                    {activeDonation.status === 'confirmed' ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Confirmed
+                {/* Chip & Pass Header */}
+                <div className="flex items-center justify-between relative z-10 mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xs">
+                      <span className="material-symbols-outlined text-[18px]">contactless</span>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-white/80 uppercase tracking-widest font-semibold">
+                        National Donor Pass
+                      </p>
+                      <p className="font-display font-bold text-[14px] tracking-tight">{donor.donorCode}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1 bg-amber-500/25 backdrop-blur-md px-2.5 py-1 rounded-full text-amber-200 text-[11px] font-bold border border-amber-400/30 shadow-xs">
+                      <span className="text-[13px]">🔥</span>
+                      <span>{donor.streak || 3}x Streak</span>
+                    </div>
+                    <div className="flex items-center gap-1 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full text-white text-[11px] font-semibold">
+                      <span
+                        className="material-symbols-outlined text-[15px] text-[#85f8c4]"
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                      >
+                        verified
                       </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Pending Scan
-                      </span>
-                    )}
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Hospital scans this unique QR token to log blood collection & credit 150 points.
-                  </p>
+                      <span>{donor.badgeTier}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 self-end sm:self-auto">
+                {/* Central Donor Info */}
+                <div className="flex items-end justify-between relative z-10 my-2">
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[11px] text-white/75 font-medium">Verified Life Saver</span>
+                    <h2 className="font-display text-[24px] font-bold truncate leading-tight">{donor.name}</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[11px] font-medium">
+                        <span className="material-symbols-outlined text-[13px]">my_location</span>
+                        <span>{donor.city}</span>
+                      </span>
+                      <span className="text-[11px] text-white/85">Active Donor</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center bg-white text-[#b70011] p-2.5 rounded-xl shadow-md flex-shrink-0">
+                    <span className="text-[10px] uppercase font-bold tracking-wider">Group</span>
+                    <span className="font-display text-[26px] font-extrabold leading-none">{donor.bloodGroup}</span>
+                  </div>
+                </div>
+
+                {/* Metrics Bar */}
+                <div className="grid grid-cols-3 gap-2 relative z-10 pt-3 mt-2 border-t border-white/15">
+                  <div className="flex items-center gap-1.5 sm:gap-2 bg-white/10 backdrop-blur-xs p-2 rounded-xl">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]">volunteer_activism</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-white/75">Total Given</p>
+                      <p className="font-display text-[13px] sm:text-[15px] font-bold truncate">{donor.totalDonations} Times</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 sm:gap-2 bg-white/10 backdrop-blur-xs p-2 rounded-xl">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]">favorite</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-white/75">Lives Saved</p>
+                      <p className="font-display text-[13px] sm:text-[15px] font-bold truncate">{donor.livesSaved}+ Souls</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 sm:gap-2 bg-amber-500/20 border border-amber-400/30 backdrop-blur-xs p-2 rounded-xl">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-500/30 flex items-center justify-center flex-shrink-0 text-amber-300">
+                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]">local_fire_department</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-amber-200/90 font-medium">Streak</p>
+                      <p className="font-display text-[13px] sm:text-[15px] font-bold text-white truncate">🔥 {donor.streak || 3}x</p>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="relative z-10 text-[10px] text-white/70 text-right mt-2 font-mono">
+                  Tap to view Full Digital Pass Card →
+                </p>
+              </section>
+
+              {/* City Leaderboard Callout Card */}
+              <div className="bg-gradient-to-r from-amber-500/10 via-red-500/10 to-rose-500/10 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center font-bold text-lg flex-shrink-0">
+                    🏆
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-display font-bold text-[14px] text-slate-900">
+                        City Lifesaver Leaderboard
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                        🔥 {donor.streak || 3}x Streak
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 truncate">
+                      View top voluntary donors ranked by points in {donor.city} and statewide
+                    </p>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => handleCheckDonationStatus(true)}
-                  disabled={isCheckingDonationStatus}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                  title="Check with server if hospital confirmed your donation"
+                  onClick={() => onSelectSubTab && onSelectSubTab('leaderboard')}
+                  className="px-3.5 py-2 rounded-xl bg-[#b70011] hover:bg-[#96000e] text-white text-[12px] font-bold flex items-center gap-1 transition-colors flex-shrink-0 shadow-sm"
                 >
-                  <span className={`material-symbols-outlined text-[15px] ${isCheckingDonationStatus ? 'animate-spin' : ''}`}>
-                    sync
-                  </span>
-                  <span>{isCheckingDonationStatus ? 'Checking...' : 'Check Status'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGeneratePendingDonation}
-                  disabled={isGeneratingDonation}
-                  className="px-3 py-1.5 rounded-lg bg-[#b70011] text-white hover:bg-[#8b0000] text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs disabled:opacity-50"
-                  title="Generate a fresh pending donation QR token"
-                >
-                  <span className={`material-symbols-outlined text-[15px] ${isGeneratingDonation ? 'animate-spin' : ''}`}>
-                    add_circle
-                  </span>
-                  <span>{isGeneratingDonation ? 'Generating...' : 'New QR'}</span>
+                  <span>Rankings</span>
+                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
                 </button>
               </div>
-            </div>
 
-            {/* QR Code Presentation Box */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-5 p-4 rounded-xl bg-gradient-to-b from-slate-50 to-white border border-slate-200/70">
-              <div className="p-3 bg-white rounded-xl shadow-xs border border-slate-200 flex flex-col items-center">
-                <QRCodeSVG
-                  value={activeDonation.qr_code}
-                  size={155}
-                  level="H"
-                  includeMargin={true}
-                  className="rounded-lg"
-                />
-              </div>
+              {/* Clinical Donation Token & Dynamic QR Section */}
+              <section className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-red-50 text-[#b70011] flex items-center justify-center border border-red-100 flex-shrink-0">
+                      <span className="material-symbols-outlined text-[20px]">qr_code_scanner</span>
+                    </div>
+                    <div>
+                      <h3 className="font-display font-bold text-[15px] text-slate-900 flex items-center gap-2">
+                        <span>Donation Verification Pass</span>
+                        {activeDonation.status === 'confirmed' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Confirmed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Pending Scan
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Hospital scans this unique QR token to log blood collection & credit 150 points.
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="flex flex-col gap-2.5 text-center sm:text-left flex-1 min-w-0">
-                <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Unique Donation Token</span>
-                  <div className="flex items-center justify-center sm:justify-start gap-1.5 mt-0.5">
-                    <code className="text-[12px] font-mono font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 truncate">
-                      {activeDonation.qr_code}
-                    </code>
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (navigator.clipboard) {
-                          navigator.clipboard.writeText(activeDonation.qr_code);
-                          showToast('QR Token copied to clipboard!');
-                        }
-                      }}
-                      className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex-shrink-0"
-                      title="Copy QR token string"
+                      onClick={() => handleCheckDonationStatus(true)}
+                      disabled={isCheckingDonationStatus}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                      title="Check with server if hospital confirmed your donation"
                     >
-                      <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                      <span className={`material-symbols-outlined text-[15px] ${isCheckingDonationStatus ? 'animate-spin' : ''}`}>
+                        sync
+                      </span>
+                      <span>{isCheckingDonationStatus ? 'Checking...' : 'Check Status'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGeneratePendingDonation}
+                      disabled={isGeneratingDonation}
+                      className="px-3 py-1.5 rounded-lg bg-[#b70011] text-white hover:bg-[#8b0000] text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs disabled:opacity-50"
+                      title="Generate a fresh pending donation QR token"
+                    >
+                      <span className={`material-symbols-outlined text-[15px] ${isGeneratingDonation ? 'animate-spin' : ''}`}>
+                        add_circle
+                      </span>
+                      <span>{isGeneratingDonation ? 'Generating...' : 'New QR'}</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-[12px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                  <div>
-                    <span className="text-slate-400 text-[10px] block">Donor Blood Group</span>
-                    <span className="font-bold text-[#b70011]">{donor.bloodGroup}</span>
+                {/* QR Code Presentation Box */}
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-5 p-4 rounded-xl bg-gradient-to-b from-slate-50 to-white border border-slate-200/70">
+                  <div className="p-3 bg-white rounded-xl shadow-xs border border-slate-200 flex flex-col items-center">
+                    <QRCodeSVG
+                      value={activeDonation.qr_code}
+                      size={155}
+                      level="H"
+                      includeMargin={true}
+                      className="rounded-lg"
+                    />
                   </div>
-                  <div>
-                    <span className="text-slate-400 text-[10px] block">Pass Status</span>
-                    <span className={`font-semibold capitalize ${activeDonation.status === 'confirmed' ? 'text-emerald-700' : 'text-amber-700'}`}>
-                      {activeDonation.status}
+
+                  <div className="flex flex-col gap-2.5 text-center sm:text-left flex-1 min-w-0">
+                    <div>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Unique Donation Token</span>
+                      <div className="flex items-center justify-center sm:justify-start gap-1.5 mt-0.5">
+                        <code className="text-[12px] font-mono font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 truncate">
+                          {activeDonation.qr_code}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (navigator.clipboard) {
+                              navigator.clipboard.writeText(activeDonation.qr_code);
+                              showToast('QR Token copied to clipboard!');
+                            }
+                          }}
+                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex-shrink-0"
+                          title="Copy QR token string"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[12px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                      <div>
+                        <span className="text-slate-400 text-[10px] block">Donor Blood Group</span>
+                        <span className="font-bold text-[#b70011]">{donor.bloodGroup}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[10px] block">Pass Status</span>
+                        <span className={`font-semibold capitalize ${activeDonation.status === 'confirmed' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {activeDonation.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <span className="material-symbols-outlined text-[15px] text-slate-400 flex-shrink-0">info</span>
+                      <span className="truncate">
+                        {activeDonation.status === 'confirmed'
+                          ? 'Donation verified & recorded. 150 points added to reserve.'
+                          : 'Live polling every 6s. Screen updates automatically once scanned.'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Live Points Widget & Fast Actions */}
+              <section className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="relative w-11 h-11 rounded-xl bg-red-50 text-[#b70011] flex items-center justify-center border border-red-100 flex-shrink-0">
+                    <span className="material-symbols-outlined text-[24px]">toll</span>
+                    <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 text-white text-[8px] font-bold items-center justify-center">
+                        ✦
+                      </span>
                     </span>
                   </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Reward Reserve</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-display text-[22px] font-extrabold text-slate-900 tabular-nums">
+                        {donor.points.toLocaleString()}
+                      </span>
+                      <span className="text-[12px] font-bold text-[#b70011]">Pts</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                  <span className="material-symbols-outlined text-[15px] text-slate-400 flex-shrink-0">info</span>
-                  <span className="truncate">
-                    {activeDonation.status === 'confirmed'
-                      ? 'Donation verified & recorded. 150 points added to reserve.'
-                      : 'Live polling every 6s. Screen updates automatically once scanned.'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Live Points Widget & Fast Actions */}
-          <section className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="relative w-11 h-11 rounded-xl bg-red-50 text-[#b70011] flex items-center justify-center border border-red-100 flex-shrink-0">
-                <span className="material-symbols-outlined text-[24px]">toll</span>
-                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 text-white text-[8px] font-bold items-center justify-center">
-                    ✦
-                  </span>
-                </span>
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Reward Reserve</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="font-display text-[22px] font-extrabold text-slate-900 tabular-nums">
-                    {donor.points.toLocaleString()}
-                  </span>
-                  <span className="text-[12px] font-bold text-[#b70011]">Pts</span>
-                </div>
-              </div>
+                <button
+                  type="button"
+                  onClick={() => onSelectSubTab && onSelectSubTab('rewards')}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors text-[13px] font-semibold text-slate-800 flex items-center gap-1 border border-slate-200"
+                >
+                  <span>Redeem</span>
+                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </button>
+              </section>
             </div>
 
-            <button
-              type="button"
-              onClick={() => onSelectSubTab && onSelectSubTab('rewards')}
-              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors text-[13px] font-semibold text-slate-800 flex items-center gap-1 border border-slate-200"
-            >
-              <span>Redeem</span>
-              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-            </button>
-          </section>
+            {/* Right Column (7 cols on lg): Metallic Lifesaver Badge Card, Referral Box, Matching Requests, Stock Preview */}
+            <div className="lg:col-span-7 flex flex-col gap-4">
+              {/* Dynamic Badge Card: Bronze, Silver, Gold by donation count */}
+              <section id="lifesaver-badge-section" className="flex flex-col gap-3.5">
+                {/* Main Metallic Badge Card Container */}
+                <div
+                  className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${currentBadgeTier.bgGradient} text-white p-5 border ${currentBadgeTier.cardBorder} transition-all duration-300`}
+                >
+                  {/* Ambient metallic sheen & decorative watermarks */}
+                  <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-white/5 blur-2xl pointer-events-none" />
+                  <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-white/5 blur-xl pointer-events-none" />
 
-          {/* Active Emergency Requests Section Matching Donor's Blood Group */}
-          {renderRequestsSection(false)}
+                  {/* Top Bar: Tier Banner & Referral Bonus Tag */}
+                  <div className="flex items-center justify-between gap-2 relative z-10 mb-4 flex-wrap">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider border uppercase ${currentBadgeTier.badgeGlow}`}>
+                      {currentBadgeTier.bannerTag}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-amber-300 bg-amber-950/60 border border-amber-700/80 px-2.5 py-1 rounded-full flex items-center gap-1 shadow-xs">
+                        <span>🔥</span>
+                        <span>{donor.streak || 3}x Streak</span>
+                      </span>
+                      <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2.5 py-1 rounded-full flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">card_giftcard</span>
+                        <span>+150 Pts / Ref</span>
+                      </span>
+                    </div>
+                  </div>
 
-          {/* Quick Read-Only Inventory Preview Widget */}
-          <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-100">
-                  <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+                  {/* Emblem & Donor Title */}
+                  <div className="flex items-center gap-4 relative z-10 mb-4">
+                    {/* Metallic 3D Emblem with Tier-Specific Glow */}
+                    <div
+                      className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${currentBadgeTier.emblemGradient} p-0.5 shadow-lg flex-shrink-0 flex items-center justify-center`}
+                    >
+                      <div className="w-full h-full rounded-[14px] bg-slate-950/40 backdrop-blur-xs flex items-center justify-center border border-white/30 text-white">
+                        <span className="material-symbols-outlined text-[34px] drop-shadow-md">
+                          {currentBadgeTier.emblemIcon}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className={`font-display font-extrabold text-[20px] leading-tight ${currentBadgeTier.textColor}`}>
+                          {currentBadgeTier.title}
+                        </h3>
+                        <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/90">
+                          {donor.bloodGroup}
+                        </span>
+                      </div>
+                      <p className="text-[12px] text-slate-300 font-medium truncate mt-0.5">
+                        {currentBadgeTier.subtitle}
+                      </p>
+                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+                        Donor Code: <span className="text-white font-bold">{donor.donorCode}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Metrics Counters Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-2xl bg-black/35 backdrop-blur-md border border-white/10 relative z-10 mb-4 text-center">
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Donations</p>
+                      <p className="font-display text-[18px] font-extrabold text-white mt-0.5">
+                        {donor.totalDonations}
+                      </p>
+                      <span className="text-[9px] text-slate-400 font-medium">Verified Count</span>
+                    </div>
+                    <div className="border-l border-white/10">
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Lives Saved</p>
+                      <p className="font-display text-[18px] font-extrabold text-rose-400 mt-0.5">
+                        {donor.totalDonations * 3 || donor.livesSaved}+
+                      </p>
+                      <span className="text-[9px] text-slate-400 font-medium">Direct Impact</span>
+                    </div>
+                    <div className="border-t sm:border-t-0 sm:border-l border-white/10 pt-2 sm:pt-0">
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Honor Points</p>
+                      <p className="font-display text-[18px] font-extrabold text-emerald-400 mt-0.5">
+                        {donor.points}
+                      </p>
+                      <span className="text-[9px] text-slate-400 font-medium">Pts Balance</span>
+                    </div>
+                    <div className="border-t sm:border-t-0 border-l border-white/10 pt-2 sm:pt-0">
+                      <p className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">Active Streak</p>
+                      <p className="font-display text-[18px] font-extrabold text-amber-300 mt-0.5 flex items-center justify-center gap-1">
+                        <span>🔥</span>
+                        <span>{donor.streak || 3}x</span>
+                      </p>
+                      <span className="text-[9px] text-amber-200/80 font-medium">Consecutive</span>
+                    </div>
+                  </div>
+
+                  {/* Tier Progress Bar to Next Tier */}
+                  <div className="p-3 rounded-2xl bg-black/25 border border-white/10 relative z-10 mb-4 flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-300 font-medium">
+                        {currentBadgeTier.nextTier
+                          ? `Milestone to ${currentBadgeTier.nextTier}`
+                          : 'Maximum Honour Tier Mastered'}
+                      </span>
+                      <span className={`font-bold ${currentBadgeTier.textColor}`}>
+                        {currentBadgeTier.nextTier
+                          ? `${donor.totalDonations} / ${currentBadgeTier.targetDonations} Donations (${currentBadgeTier.progressPercent}%)`
+                          : 'Top 5% Lifetime Lifesaver'}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className={`h-full bg-gradient-to-r ${currentBadgeTier.emblemGradient} transition-all duration-500 rounded-full`}
+                        style={{ width: `${currentBadgeTier.progressPercent}%` }}
+                      />
+                    </div>
+                    {currentBadgeTier.nextTier ? (
+                      <p className="text-[10px] text-slate-400 text-right">
+                        Only <span className="font-bold text-white">{currentBadgeTier.donationsToNext}</span> more donation{currentBadgeTier.donationsToNext > 1 ? 's' : ''} to unlock <span className="text-white font-bold">{currentBadgeTier.nextTier}</span>!
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-amber-300 text-right font-medium">
+                        ★ Gold Level Master: Highest recognition in voluntary blood services.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Exclusive Tier Privileges List */}
+                  <div className="relative z-10 mb-4">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
+                      {currentBadgeTier.tier} Tier Privileges
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {currentBadgeTier.perks.map((perk, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 rounded-lg bg-white/10 border border-white/10 text-[10px] font-medium text-slate-200 flex items-center gap-1"
+                        >
+                          <span className="text-emerald-400">✓</span> {perk}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Actions: "Share my badge" & Download High-Res PNG */}
+                  <div className="flex gap-2 relative z-10 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleShareBadgeClick}
+                      className="flex-1 h-11 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white text-[13px] font-bold flex items-center justify-center gap-2 shadow-lg active:scale-98 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[19px]">share</span>
+                      <span>Share my badge</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={downloadBadgeImage}
+                      title="Download High-Res Badge PNG"
+                      className="h-11 px-3.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-[12px] font-semibold flex items-center justify-center gap-1.5 border border-white/15 backdrop-blur-md transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">download</span>
+                      <span className="hidden sm:inline">Download</span>
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-display font-bold text-[14px] text-slate-900">
-                    Hospital Blood Stock (Read-Only)
-                  </h3>
-                  <p className="text-[11px] text-slate-500">Live units across 20 regional centers</p>
-                </div>
-              </div>
 
-              <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                Read-Only
-              </span>
+                {/* Quick Referral Invite Box */}
+                <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-slate-700 text-xs">
+                    <span className="font-semibold flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-[#b70011]">link</span>
+                      <span>Your Referral Link (Code: {donorReferralCode})</span>
+                    </span>
+                    <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 text-[10px]">
+                      Earn +150 Pts
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 gap-2">
+                    <span className="text-[12px] text-slate-800 font-mono truncate select-all">
+                      {donorReferralUrl}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyBadgeShare(donorReferralUrl)}
+                      className="flex items-center gap-1 text-[#b70011] text-[12px] font-bold px-2.5 py-1 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">
+                        {badgeShareCopied ? 'check' : 'content_copy'}
+                      </span>
+                      <span>{badgeShareCopied ? 'Copied!' : 'Copy Link'}</span>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              {/* Active Emergency Requests Section Matching Donor's Blood Group */}
+              {renderRequestsSection(false)}
+
+              {/* Quick Read-Only Inventory Preview Widget */}
+              <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-100">
+                      <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+                    </div>
+                    <div>
+                      <h3 className="font-display font-bold text-[14px] text-slate-900">
+                        Hospital Blood Stock (Read-Only)
+                      </h3>
+                      <p className="text-[11px] text-slate-500">Live units across 20 regional centers</p>
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                    Read-Only
+                  </span>
+                </div>
+
+                <p className="text-[12px] text-slate-600 leading-relaxed">
+                  Monitor live public reserves across all 8 blood groups at connected regional blood banks and ICUs.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => onSelectSubTab && onSelectSubTab('inventory')}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
+                >
+                  <span className="material-symbols-outlined text-[16px]">table_chart</span>
+                  <span>Open Full Inventory Table & Filter</span>
+                </button>
+              </section>
             </div>
-
-            <p className="text-[12px] text-slate-600 leading-relaxed">
-              Monitor live public reserves across all 8 blood groups at connected regional blood banks and ICUs.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => onSelectSubTab && onSelectSubTab('inventory')}
-              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
-            >
-              <span className="material-symbols-outlined text-[16px]">table_chart</span>
-              <span>Open Full Inventory Table & Filter</span>
-            </button>
-          </section>
-        </>
+          </div>
+        </div>
       )}
 
       {/* PAGE: EMERGENCY REQUESTS TAB */}
@@ -2410,7 +2786,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
                 <p className="text-xs text-slate-500">Fetching partner healthcare vouchers & active redemptions</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {(coupons.length > 0 ? coupons : (rewards as any)).map((coupon: any) => {
                   const cost = Number(coupon.cost_points ?? coupon.pointsCost ?? 0);
                   const isRedeemed = Boolean(redeemedMap[coupon.id] || coupon.redeemed);
@@ -2540,90 +2916,137 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
         </>
       )}
 
-      {/* Social Donor Badge Generator & Referral System (Part of E-Pass Page) */}
-      {currentPage === 'pass' && (
-      <section className="flex flex-col gap-3 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-red-50 text-[#b70011] flex items-center justify-center border border-red-100">
-              <span className="material-symbols-outlined text-[18px]">workspace_premium</span>
-            </div>
-            <h3 className="font-display font-bold text-[15px] text-slate-900">Share Life Saver Badge</h3>
-          </div>
-          <span className="text-[11px] text-[#b70011] font-bold">+150 Pts / Ref</span>
-        </div>
 
-        {/* Graphic Badge Card Preview */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-4 shadow-md border border-slate-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-red-500 shadow-sm">
-                <img
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCiY7Jiu_Br9wXA5vUIOP-zqg8dbBramnHJbbL8mAoDvzwFiE-SVS0AJawDg9Fwe8prEZGLPWSUuUf_ixyp9-G8vsrK-2Ex_6C4xOgoLNFraEtifM1TyyAAQW3qNYfVNpn3E-vqpz7luhjR8xfmdarOG9rs4n4DuApH_xyIKqer7rtuS09LMkuHmnymu5I8n_VXXMFF976K-Lz21zfzrqixWv7ljZq_RFoTB69tQyG1OTH53GpyyW4M"
-                  alt="Rahul Sharma portrait"
-                  className="w-full h-full object-cover"
-                />
+
+      {/* PAGE: CITY LEADERBOARD */}
+      {currentPage === 'leaderboard' && (
+        <Leaderboard
+          liveDonors={liveDonors}
+          currentDonor={donor}
+          onSelectSubTab={onSelectSubTab}
+        />
+      )}
+
+      {/* Modal: Share My Life Saver Badge */}
+      {showShareBadgeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${currentBadgeTier.emblemGradient} text-white flex items-center justify-center shadow-xs`}>
+                  <span className="material-symbols-outlined text-[20px]">
+                    {currentBadgeTier.emblemIcon}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-[16px] text-slate-900">
+                    Share {currentBadgeTier.title}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Invite new voluntary donors & save lives together
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowShareBadgeModal(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Badge Mini Preview Card */}
+            <div className={`p-4 rounded-2xl bg-gradient-to-br ${currentBadgeTier.bgGradient} text-white border ${currentBadgeTier.cardBorder} flex items-center justify-between gap-3 shadow-md`}>
               <div className="min-w-0">
-                <span className="text-[10px] text-red-400 font-bold tracking-wider uppercase">
-                  Blood-Connect Hero
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${currentBadgeTier.textColor}`}>
+                  {currentBadgeTier.bannerTag}
                 </span>
-                <p className="font-display font-bold text-[15px] truncate">{donor.name}</p>
-                <p className="text-[11px] text-slate-300">Proud {donor.bloodGroup} Life Saver</p>
+                <p className="font-display font-extrabold text-[16px] truncate">{donor.name}</p>
+                <p className="text-[11px] text-slate-300">
+                  {donor.bloodGroup} • {donor.totalDonations} Donations • Code: <span className="font-mono text-white font-bold">{donorReferralCode}</span>
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white shrink-0">
+                <span className="material-symbols-outlined text-[28px]">
+                  {currentBadgeTier.emblemIcon}
+                </span>
               </div>
             </div>
 
-            {/* QR Code Sim */}
-            <div className="w-12 h-12 bg-white p-1 rounded-xl flex items-center justify-center flex-shrink-0 shadow-xs">
-              <svg className="w-full h-full text-slate-900" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M2 2h8v8H2V2zm2 2v4h4V4H4zm10-2h8v8h-8V2zm2 2v4h4V4h-4zM2 14h8v8H2v-8zm2 2v4h4v-4H4zm14 0h-2v2h2v-2zm-4 0h2v2h-2v-2zm4 4h-2v2h2v-2zm2-2h2v4h-2v-4zm0-4h2v2h-2v-2zm-6 4h2v2h-2v-2z"></path>
-              </svg>
+            {/* Share Message text area */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Invitation Message
+              </label>
+              <textarea
+                readOnly
+                value={donorShareMessage}
+                rows={4}
+                className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-[12px] leading-relaxed resize-none focus:outline-none"
+              />
+            </div>
+
+            {/* Share Channels */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* WhatsApp Share */}
+              <a
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(donorShareMessage)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="h-11 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
+              >
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                </svg>
+                <span>WhatsApp</span>
+              </a>
+
+              {/* Telegram Share */}
+              <a
+                href={`https://t.me/share/url?url=${encodeURIComponent(donorReferralUrl)}&text=${encodeURIComponent(donorShareMessage)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="h-11 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
+              >
+                <span className="material-symbols-outlined text-[18px]">send</span>
+                <span>Telegram</span>
+              </a>
+            </div>
+
+            {/* Copy & Native Share */}
+            <div className="flex gap-2">
+              {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.share({
+                      title: `${currentBadgeTier.title} - Blood-Connect`,
+                      text: donorShareMessage,
+                      url: donorReferralUrl,
+                    }).catch(() => {});
+                  }}
+                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[12px] font-bold flex items-center justify-center gap-1.5 border border-slate-200 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[17px]">devices</span>
+                  <span>Device Share</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleCopyBadgeShare(donorShareMessage)}
+                className="flex-1 h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[17px]">
+                  {badgeShareCopied ? 'check' : 'content_copy'}
+                </span>
+                <span>{badgeShareCopied ? 'Copied!' : 'Copy Invite Message'}</span>
+              </button>
             </div>
           </div>
-
-          <div className="mt-4 pt-1 flex gap-2">
-            <button
-              onClick={shareToSocial}
-              className="flex-1 h-10 rounded-xl bg-[#b70011] hover:bg-red-700 text-white text-[12px] font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all"
-            >
-              <span className="material-symbols-outlined text-[17px]">share</span>
-              <span>Share to Social</span>
-            </button>
-
-            <button
-              onClick={downloadBadgeImage}
-              title="Download High-Res Badge PNG"
-              className="h-10 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-[12px] font-semibold flex items-center justify-center gap-1 border border-slate-700 transition-colors"
-            >
-              <span className="material-symbols-outlined text-[17px]">download</span>
-              <span className="hidden sm:inline">Download</span>
-            </button>
-          </div>
         </div>
-
-        {/* Referral Link Box */}
-        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 flex flex-col gap-1.5">
-          <div className="flex items-center justify-between text-slate-600 text-[11px]">
-            <span>Your Personal Referral URL</span>
-            <span className="text-emerald-700 font-bold">Earn 150 Pts</span>
-          </div>
-
-          <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-200">
-            <span className="text-[12px] text-slate-800 font-mono truncate">
-              bloodconnect.in/ref/{donor.referralCode}
-            </span>
-            <button
-              onClick={copyReferralUrl}
-              className="flex items-center gap-1 text-[#b70011] text-[12px] font-bold px-2 py-0.5 rounded hover:bg-red-50 transition-colors"
-            >
-              <span className="material-symbols-outlined text-[15px]">
-                {referralCopied ? 'check' : 'content_copy'}
-              </span>
-              <span>{referralCopied ? 'Copied!' : 'Copy'}</span>
-            </button>
-          </div>
-        </div>
-      </section>
       )}
 
       {/* Modal: Digital Pass & QR Code */}
@@ -2669,7 +3092,15 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
 
             <div className="text-center">
               <p className="font-display font-bold text-slate-900 text-base">{donor.name}</p>
-              <p className="text-xs text-slate-500">Blood Group: {donor.bloodGroup} • {donor.badgeTier}</p>
+              <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
+                <span className="text-xs text-slate-500">
+                  Blood Group: <strong className="text-slate-800">{donor.bloodGroup}</strong> • {donor.badgeTier}
+                </span>
+                <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full text-amber-700 text-[11px] font-bold">
+                  <span>🔥</span>
+                  <span>{donor.streak || 3}x Donation Streak</span>
+                </span>
+              </div>
             </div>
 
             <button

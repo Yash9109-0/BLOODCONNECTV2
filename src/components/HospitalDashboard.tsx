@@ -369,7 +369,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
     : 'inventory';
 
   return (
-    <div className="flex flex-col w-full max-w-md mx-auto px-4 py-4 pb-28 gap-4">
+    <div className="flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 gap-6">
       {/* PAGE 1: INVENTORY & OVERVIEW */}
       {currentPage === 'inventory' && (
         <>
@@ -608,8 +608,8 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
               </span>
             </div>
 
-            {/* 2x4 Interactive Card Grid */}
-            <div className="grid grid-cols-2 gap-2.5">
+            {/* 2x4 Interactive Card Grid on mobile / 8-col on desktop */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3">
               {inventory.map((item) => {
                 const isCritical = item.status === 'Critical';
                 const isLow = item.status === 'Low';
@@ -728,7 +728,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
       {currentPage === 'broadcast' && (
         <section
           id="broadcast-creator-section"
-          className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3.5"
+          className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200/80 shadow-xs flex flex-col gap-4 max-w-3xl mx-auto w-full"
         >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -1202,7 +1202,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
 
       {/* PAGE 3: CONFIRM DONATION & QR SCAN TERMINAL */}
       {currentPage === 'confirm' && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full">
           {/* Header Card */}
           <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-2">
             <div className="flex items-center justify-between">
@@ -1573,7 +1573,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
             </div>
 
             {/* Hospital Stock List */}
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto pr-1">
               {filteredCrossStock.map((item) => (
                 <div
                   key={item.hospitalId + item.group}
@@ -1672,7 +1672,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
         </div>
 
         {/* Donors List */}
-        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto pr-1">
           {filteredRegistryDonors.slice(0, 25).map((d) => (
             <div
               key={d.id}
@@ -1748,96 +1748,98 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
           </span>
         </div>
 
-        {camps.map((camp) => (
-          <div key={camp.id} className="rounded-xl bg-slate-50 border border-slate-200/80 p-3.5 flex flex-col gap-2.5">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex flex-col min-w-0">
-                <h3 className="font-display font-bold text-[14px] text-[#0b1c30] truncate">
-                  {camp.title}
-                </h3>
-                <p className="text-[12px] text-slate-500 mt-0.5">{camp.venue}</p>
-              </div>
-              <span className="w-9 h-9 rounded-lg bg-red-100 text-[#b70011] flex items-center justify-center flex-shrink-0">
-                <span className="material-symbols-outlined text-[20px]">diversity_1</span>
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-0.5">
-              <div className="bg-white rounded-lg p-2 border border-slate-200/60 flex items-center gap-2">
-                <span className="material-symbols-outlined text-slate-400 text-[17px]">schedule</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {camps.map((camp) => (
+            <div key={camp.id} className="rounded-xl bg-slate-50 border border-slate-200/80 p-3.5 flex flex-col gap-2.5">
+              <div className="flex items-start justify-between gap-2">
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[10px] font-semibold text-slate-500">Date & Time</span>
-                  <span className="text-[11px] font-bold text-slate-800 truncate">
-                    {camp.dateStr}, {camp.timeStr}
-                  </span>
+                  <h3 className="font-display font-bold text-[14px] text-[#0b1c30] truncate">
+                    {camp.title}
+                  </h3>
+                  <p className="text-[12px] text-slate-500 mt-0.5">{camp.venue}</p>
+                </div>
+                <span className="w-9 h-9 rounded-lg bg-red-100 text-[#b70011] flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-[20px]">diversity_1</span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-0.5">
+                <div className="bg-white rounded-lg p-2 border border-slate-200/60 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-slate-400 text-[17px]">schedule</span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] font-semibold text-slate-500">Date & Time</span>
+                    <span className="text-[11px] font-bold text-slate-800 truncate">
+                      {camp.dateStr}, {camp.timeStr}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-2 border border-slate-200/60 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-emerald-600 text-[17px]">how_to_reg</span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] font-semibold text-slate-500">Pledged Donors</span>
+                    <span className="text-[11px] font-bold text-slate-800 tabular-nums">
+                      {camp.pledgedCount} Registered
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg p-2 border border-slate-200/60 flex items-center gap-2">
-                <span className="material-symbols-outlined text-emerald-600 text-[17px]">how_to_reg</span>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[10px] font-semibold text-slate-500">Pledged Donors</span>
-                  <span className="text-[11px] font-bold text-slate-800 tabular-nums">
-                    {camp.pledgedCount} Registered
-                  </span>
-                </div>
-              </div>
-            </div>
+              {/* Drive Action Controls */}
+              <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                <a
+                  href={camp.googleMapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[15px] text-red-600">location_on</span>
+                  <span>Map Pin</span>
+                </a>
 
-            {/* Drive Action Controls */}
-            <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-              <a
-                href={camp.googleMapsUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1 transition-colors"
-              >
-                <span className="material-symbols-outlined text-[15px] text-red-600">location_on</span>
-                <span>Map Pin</span>
-              </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAddWalkIn(camp.id);
+                    showToast('Walk-in donor registered for ' + camp.title);
+                  }}
+                  className="flex-1 min-w-[90px] bg-[#b70011] hover:bg-red-700 text-white text-[11px] font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1 shadow-xs transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[15px]">person_add</span>
+                  <span>+ Walk-in</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  onAddWalkIn(camp.id);
-                  showToast('Walk-in donor registered for ' + camp.title);
-                }}
-                className="flex-1 min-w-[90px] bg-[#b70011] hover:bg-red-700 text-white text-[11px] font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1 shadow-xs transition-colors"
-              >
-                <span className="material-symbols-outlined text-[15px]">person_add</span>
-                <span>+ Walk-in</span>
-              </button>
+                {/* Edit Camp Button */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditCamp(camp)}
+                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1 transition-colors"
+                  title="Edit this donation drive"
+                >
+                  <span className="material-symbols-outlined text-[15px]">edit</span>
+                  <span>Edit</span>
+                </button>
 
-              {/* Edit Camp Button */}
-              <button
-                type="button"
-                onClick={() => handleOpenEditCamp(camp)}
-                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1 transition-colors"
-                title="Edit this donation drive"
-              >
-                <span className="material-symbols-outlined text-[15px]">edit</span>
-                <span>Edit</span>
-              </button>
-
-              {/* Delete Camp Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm(`Are you sure you want to cancel and delete "${camp.title}"?`)) {
-                    if (onDeleteCamp) {
-                      onDeleteCamp(camp.id);
+                {/* Delete Camp Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to cancel and delete "${camp.title}"?`)) {
+                      if (onDeleteCamp) {
+                        onDeleteCamp(camp.id);
+                      }
+                      showToast(`Deleted drive "${camp.title}"`);
                     }
-                    showToast(`Deleted drive "${camp.title}"`);
-                  }
-                }}
-                className="px-2 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-700 text-[11px] font-semibold rounded-lg flex items-center justify-center transition-colors"
-                title="Delete this drive"
-              >
-                <span className="material-symbols-outlined text-[15px]">delete</span>
-              </button>
+                  }}
+                  className="px-2 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-700 text-[11px] font-semibold rounded-lg flex items-center justify-center transition-colors"
+                  title="Delete this drive"
+                >
+                  <span className="material-symbols-outlined text-[15px]">delete</span>
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
         {/* Schedule New Regional Camp */}
         <button

@@ -75,6 +75,25 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [authError, setAuthError] = useState<string | null>(() => readOAuthRedirectError());
   const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
 
+  // Referred by code captured from referral invite link (?ref=... or localStorage)
+  const [referredBy, setReferredBy] = useState<string>(() => {
+    try {
+      const search = new URLSearchParams(window.location.search);
+      const r = search.get('ref') || search.get('referred_by') || localStorage.getItem('bc_referred_by') || '';
+      return r.trim();
+    } catch {
+      return '';
+    }
+  });
+
+  // If visitor arrives via referral link, automatically direct them to donor registration
+  React.useEffect(() => {
+    if (referredBy) {
+      setAuthMode('register');
+      setActiveRole('donor');
+    }
+  }, [referredBy]);
+
   const handleRoleChange = (newRole: UserRole) => {
     setActiveRole(newRole);
     setAuthError(null);
@@ -150,6 +169,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         facilityName: hospitalName.trim(),
         licenseNumber: licenseNo.trim(),
         address: hospitalAddress.trim(),
+        referredBy: activeRole === 'donor' && referredBy.trim() ? referredBy.trim() : undefined,
       });
 
       if (!result.success) {
@@ -198,22 +218,117 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   };
 
   return (
-    <div className="flex flex-col w-full max-w-md mx-auto px-4 py-4 pb-24">
-      {/* Brand Intro & Trust Header */}
-      <div className="pt-2 pb-2 flex flex-col gap-1.5">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-100 w-fit">
-          <span className="w-2 h-2 rounded-full bg-[#b70011] animate-pulse"></span>
-          <span className="text-[11px] font-semibold text-[#b70011] uppercase tracking-wider">
-            Rapid Response Life Grid
-          </span>
+    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+        {/* Left Column on Desktop (Hidden on mobile): National Health Platform Showcase */}
+        <div className="hidden lg:flex lg:col-span-5 flex-col gap-6 sticky top-24 pt-2">
+          <div className="flex flex-col gap-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-100 w-fit">
+              <span className="w-2 h-2 rounded-full bg-[#b70011] animate-pulse"></span>
+              <span className="text-[11px] font-bold text-[#b70011] uppercase tracking-wider">
+                National Rapid Response Life Grid
+              </span>
+            </div>
+            <h1 className="font-display text-[32px] font-extrabold text-[#0b1c30] tracking-tight leading-tight">
+              Chhattisgarh State Lifeline Network
+            </h1>
+            <p className="text-[15px] text-slate-600 leading-relaxed">
+              Real-time synchronization connecting regional blood banks, emergency ICU trauma wards, and registered voluntary lifesavers.
+            </p>
+          </div>
+
+          {/* Live Telemetry Card */}
+          <div className="p-5 rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-[#410002] text-white shadow-xl border border-red-900/30 flex flex-col gap-4">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-300">
+                  Live Network Telemetry
+                </span>
+              </div>
+              <span className="text-[11px] text-white/60">Updated Live</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white/10 backdrop-blur-xs p-3 rounded-2xl border border-white/10">
+                <p className="text-[11px] text-white/70">Connected Facilities</p>
+                <p className="font-display text-[22px] font-bold text-white mt-0.5">20 Banks</p>
+                <span className="text-[10px] text-emerald-400 font-medium">Statewide Grid</span>
+              </div>
+              <div className="bg-white/10 backdrop-blur-xs p-3 rounded-2xl border border-white/10">
+                <p className="text-[11px] text-white/70">Voluntary Donors</p>
+                <p className="font-display text-[22px] font-bold text-white mt-0.5">1,000+ Ready</p>
+                <span className="text-[10px] text-amber-300 font-medium">Verified Active</span>
+              </div>
+              <div className="bg-white/10 backdrop-blur-xs p-3 rounded-2xl border border-white/10">
+                <p className="text-[11px] text-white/70">Emergency Response</p>
+                <p className="font-display text-[22px] font-bold text-rose-300 mt-0.5">&lt;15 Mins</p>
+                <span className="text-[10px] text-white/60 font-medium">Average SOS Dispatch</span>
+              </div>
+              <div className="bg-white/10 backdrop-blur-xs p-3 rounded-2xl border border-white/10">
+                <p className="text-[11px] text-white/70">Clinical Health Bot</p>
+                <p className="font-display text-[22px] font-bold text-emerald-300 mt-0.5">100% Free</p>
+                <span className="text-[10px] text-white/60 font-medium">English • Hindi • Hinglish</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-slate-300 pt-1">
+              <span className="material-symbols-outlined text-emerald-400 text-[18px]">verified_user</span>
+              <span>Encrypted with NACO & Ministry of Health Standards</span>
+            </div>
+          </div>
+
+          {/* Three Roles Highlight */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-red-50 text-[#b70011] flex items-center justify-center font-bold flex-shrink-0">
+                <span className="material-symbols-outlined text-[20px]">favorite</span>
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900">For Voluntary Donors</h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">Digital E-Pass, QR verification, streak badges, rewards vouchers & emergency blood requests.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold flex-shrink-0">
+                <span className="material-symbols-outlined text-[20px]">local_hospital</span>
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900">For Hospitals & Blood Centers</h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">Real-time inventory management, threshold warnings, SOS emergency broadcasts & QR scanner.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold flex-shrink-0">
+                <span className="material-symbols-outlined text-[20px]">shield_person</span>
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900">For State Health Authorities</h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">Facility accreditation verification, statewide lifeline logs & regulatory compliance audits.</p>
+              </div>
+            </div>
+          </div>
         </div>
-        <h1 className="font-display text-[26px] font-bold text-[#0b1c30] tracking-tight leading-tight">
-          National Lifeline Network
-        </h1>
-        <p className="text-[14px] text-slate-600 leading-snug">
-          Connecting verified voluntary donors, regional blood banks & critical ICU wards in real-time.
-        </p>
-      </div>
+
+        {/* Right Column: Form Container */}
+        <div className="lg:col-span-7 flex flex-col w-full max-w-xl mx-auto lg:max-w-none bg-white p-4 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xl">
+          {/* Mobile-only brand header */}
+          <div className="lg:hidden pt-2 pb-2 flex flex-col gap-1.5">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-100 w-fit">
+              <span className="w-2 h-2 rounded-full bg-[#b70011] animate-pulse"></span>
+              <span className="text-[11px] font-semibold text-[#b70011] uppercase tracking-wider">
+                Rapid Response Life Grid
+              </span>
+            </div>
+            <h1 className="font-display text-[26px] font-bold text-[#0b1c30] tracking-tight leading-tight">
+              National Lifeline Network
+            </h1>
+            <p className="text-[14px] text-slate-600 leading-snug">
+              Connecting verified voluntary donors, regional blood banks & critical ICU wards in real-time.
+            </p>
+          </div>
 
       {/* Role Switcher / Segmented Selector */}
       <div className="mt-3 bg-slate-200/70 p-1 rounded-xl flex items-center justify-between gap-1 shadow-xs">
@@ -431,6 +546,43 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                         required
                       />
                     </div>
+                  </div>
+
+                  {/* Referred By / Referral Code field */}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[12px] font-semibold text-slate-600">
+                        Referred By (Donor Code / Invite Link)
+                      </label>
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">card_giftcard</span>
+                        <span>+100 Welcome Pts</span>
+                      </span>
+                    </div>
+                    <div className="relative flex items-center">
+                      <span className="material-symbols-outlined absolute left-3 text-slate-400 text-[19px]">group_add</span>
+                      <input
+                        type="text"
+                        value={referredBy}
+                        onChange={(e) => setReferredBy(e.target.value.toUpperCase())}
+                        placeholder="e.g. BC-IN-994821 or rahul-o-plus (Optional)"
+                        className={`w-full h-11 pl-10 pr-3 rounded-lg text-slate-900 text-[14px] font-mono tracking-wide focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all ${
+                          referredBy
+                            ? 'bg-emerald-50/70 border-emerald-300 font-bold'
+                            : 'bg-slate-50 border border-slate-200'
+                        }`}
+                      />
+                    </div>
+                    {referredBy ? (
+                      <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1 mt-0.5">
+                        <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                        <span>Referral active! You and your inviter will receive bonus LifeSaver points on sign up.</span>
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Have a friend's referral link or code? Enter it here to claim 100 extra points.
+                      </p>
+                    )}
                   </div>
                 </>
               ) : (
@@ -703,6 +855,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
           Donor biodata and hospital inventories are guarded under clinical confidentiality protocols.
         </p>
+      </div>
+        </div>
       </div>
     </div>
   );

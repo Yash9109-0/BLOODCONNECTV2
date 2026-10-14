@@ -67,6 +67,7 @@ const INITIAL_DONOR: DonorProfile = {
   livesSaved: 18,
   referralCode: 'rahul-o-plus',
   referralsCount: 4,
+  streak: 3,
 };
 
 const INITIAL_REWARDS: RewardVoucher[] = [
@@ -428,7 +429,7 @@ export function useBloodConnectStore() {
       const validTabs =
         role === 'hospital'
           ? ['inventory', 'broadcast', 'confirm', 'facilities', 'registry', 'camps']
-          : ['pass', 'requests', 'inventory', 'eligibility', 'centers', 'rewards', 'bot'];
+          : ['pass', 'requests', 'inventory', 'eligibility', 'centers', 'rewards', 'leaderboard', 'bot'];
       return validTabs.includes(prev) ? prev : role === 'hospital' ? 'inventory' : 'pass';
     });
     localStorage.setItem('bc_session', JSON.stringify(newSession));

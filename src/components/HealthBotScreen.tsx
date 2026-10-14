@@ -9,7 +9,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   {
     id: 'msg-0',
     role: 'bot',
-    text: 'Namaste! I am BloodBot AI, your 24/7 clinical blood donation & health guide. Aap mujhse voluntary blood donation, anemia, thalassemia, iron diet, ya eligibility ke baare me pooch sakte hain.\n\n⚠️ Disclaimer: Not professional medical diagnosis; in critical emergencies contact local emergency numbers (112) or visit the nearest hospital.',
+    text: 'Namaste! I am BloodBot, your assistant for general blood donation information. You can ask me in English, Hindi, or Hinglish about eligibility, iron diet, or donation intervals.\n\n⚠️ This is not medical advice, please ask a doctor.',
     timestamp: 'Just now',
     language: 'hinglish',
   },
@@ -93,10 +93,10 @@ export const HealthBotScreen: React.FC<HealthBotScreenProps> = ({ donor }) => {
         role: 'bot',
         text:
           selectedLanguage === 'hi'
-            ? 'रक्तदान से पूर्व 500 मिली पानी पिएं और आयरन युक्त आहार लें। किसी भी आपात स्थिति में 112 पर कॉल करें।\n\n⚠️ Disclaimer: Not professional medical diagnosis.'
+            ? 'रक्तदान से पूर्व 500 मिली पानी पिएं और संतुलित भोजन लें। अस्पताल स्टॉक के लिए Hospital Inventory टैब देखें।\n\n⚠️ This is not medical advice, please ask a doctor.'
             : selectedLanguage === 'hinglish'
-            ? 'Donation se pehle khoob paani piyein aur halka poshtik khana khayein. Emergency me 112 par call karein.\n\n⚠️ Disclaimer: Not professional medical diagnosis.'
-            : 'Stay well-hydrated with 500ml water and avoid heavy greasy food before donation. In emergency, call 112.\n\n⚠️ Disclaimer: Not professional medical diagnosis.',
+            ? 'Donation se pehle khoob paani piyein aur poshtik khana khayein. Hospital stock ke liye Inventory tab dekhein.\n\n⚠️ This is not medical advice, please ask a doctor.'
+            : 'Stay well-hydrated with water and eat a healthy meal before donating. For hospital stock, check the Hospital Inventory tab.\n\n⚠️ This is not medical advice, please ask a doctor.',
         timestamp: 'Just now',
         language: selectedLanguage,
       };
@@ -117,11 +117,11 @@ export const HealthBotScreen: React.FC<HealthBotScreenProps> = ({ donor }) => {
     setSelectedLanguage(lang);
     let greeting = '';
     if (lang === 'en') {
-      greeting = `Hello ${donor.name}! Feel free to ask any query regarding blood donation, anemia, tattoo wait periods, or dietary tips.\n\n⚠️ Disclaimer: Not professional medical diagnosis; in critical emergencies contact local emergency numbers (112) or visit the nearest hospital.`;
+      greeting = `Hello ${donor.name}! Feel free to ask general blood donation questions regarding eligibility, waiting intervals, or dietary tips.\n\n⚠️ This is not medical advice, please ask a doctor.`;
     } else if (lang === 'hi') {
-      greeting = `नमस्ते ${donor.name}! रक्तदान, थैलेसीमिया, हीमोग्लोबिन स्तर या आहार संबंधी कोई भी प्रश्न पूछें।\n\n⚠️ Disclaimer: Not professional medical diagnosis; in critical emergencies contact local emergency numbers (112) or visit the nearest hospital.`;
+      greeting = `नमस्ते ${donor.name}! सामान्य रक्तदान पात्रता, अंतराल या हीमोग्लोबिन आहार संबंधी कोई भी प्रश्न पूछें।\n\n⚠️ This is not medical advice, please ask a doctor.`;
     } else {
-      greeting = `Namaste ${donor.name}! Aapki blood donation, hemoglobin diet ya medical query ho toh puchiye.\n\n⚠️ Disclaimer: Not professional medical diagnosis; in critical emergencies contact local emergency numbers (112) or visit the nearest hospital.`;
+      greeting = `Namaste ${donor.name}! Aap voluntary blood donation, eligibility ya hemoglobin diet se related general sawal pooch sakte hain.\n\n⚠️ This is not medical advice, please ask a doctor.`;
     }
 
     setMessages((prev) => [
@@ -137,7 +137,7 @@ export const HealthBotScreen: React.FC<HealthBotScreenProps> = ({ donor }) => {
   };
 
   return (
-    <div className="flex flex-col w-full max-w-md mx-auto px-4 py-4 pb-28 gap-3">
+    <div className="flex flex-col w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 gap-4">
       {/* Header Bar */}
       <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -225,7 +225,7 @@ export const HealthBotScreen: React.FC<HealthBotScreenProps> = ({ donor }) => {
       </div>
 
       {/* Chat Messages Stream */}
-      <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3 min-h-[380px] max-h-[500px] overflow-y-auto">
+      <section className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200/80 shadow-xs flex flex-col gap-3 min-h-[420px] max-h-[600px] overflow-y-auto">
         {messages.map((m) => {
           const isUser = m.role === 'user';
           return (
@@ -311,7 +311,7 @@ export const HealthBotScreen: React.FC<HealthBotScreenProps> = ({ donor }) => {
 
       {/* Mandatory Clinical Disclaimer Footer */}
       <p className="text-[11px] text-slate-400 text-center px-4 leading-relaxed">
-        BloodBot provides general clinical donor education. Never ignore emergency medical advice.
+        BloodBot only provides general blood donation information and never invents hospital data. This is not medical advice, please ask a doctor.
       </p>
     </div>
   );

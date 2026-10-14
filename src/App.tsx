@@ -59,6 +59,17 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Capture ?ref= or ?referred_by= from URL on app load
+  React.useEffect(() => {
+    try {
+      const search = new URLSearchParams(window.location.search);
+      const ref = search.get('ref') || search.get('referred_by');
+      if (ref) {
+        localStorage.setItem('bc_referred_by', ref.trim());
+      }
+    } catch {}
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex flex-col font-sans selection:bg-red-500/20">
       {/* Top Fixed Header with role badge and logout button */}

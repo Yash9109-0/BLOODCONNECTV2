@@ -27,6 +27,7 @@ export interface SignUpProfile {
   facilityName?: string;
   licenseNumber?: string;
   address?: string;
+  referredBy?: string;
 }
 
 export type AuthResult =
@@ -94,6 +95,7 @@ function buildMetadata(profile: SignUpProfile): Record<string, unknown> {
     if (profile.age) metadata.age = profile.age;
     if (profile.weight) metadata.weight = profile.weight;
     if (profile.hemoglobin) metadata.hemoglobin = profile.hemoglobin;
+    if (profile.referredBy) metadata.referred_by = profile.referredBy.trim();
   } else {
     metadata.facility_name = profile.facilityName || profile.fullName;
     metadata.license_number = profile.licenseNumber || '';
@@ -128,6 +130,11 @@ export async function ensureAccountRow(user: User): Promise<void> {
       if (existing && existing.length > 0) return;
 
       const fullName = String(meta.full_name || getUserDisplayName(user));
+      const refCode = meta.referred_by ? String(meta.referred_by).trim() : null;
+      const totalD = Number(meta.total_donations) || 0;
+      const badgeLevel = totalD >= 5 ? 'Gold' : totalD >= 3 ? 'Silver' : 'Bronze';
+      const welcomeBonus = refCode ? 100 : 0;
+
       const { error: insertError } = await supabase.from('donors').insert({
         donor_id: user.id,
         name: fullName,
@@ -140,9 +147,31 @@ export async function ensureAccountRow(user: User): Promise<void> {
         hemoglobin: Number(meta.hemoglobin) || null,
         is_available: true,
         is_eligible: true,
-        points: 100,
+        points: 100 + welcomeBonus,
+        referred_by: refCode,
+        badge_level: badgeLevel,
       });
-      if (insertError) console.warn('Donor row insert note:', insertError.message);
+
+      if (insertError) {
+        console.warn('Donor row insert note:', insertError.message);
+      }
+
+      // Notify server to award points to referrer and log referral
+      if (refCode) {
+        try {
+          await fetch('/api/referrals/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              referredBy: refCode,
+              newDonorId: user.id,
+              newDonorName: fullName,
+            }),
+          });
+        } catch (e) {
+          // non-critical
+        }
+      }
       return;
     }
 

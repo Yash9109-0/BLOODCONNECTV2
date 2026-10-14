@@ -42,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <>
       <header className="fixed top-0 w-full z-40 bg-[#f8f9ff]/90 backdrop-blur-xl border-b border-slate-200/80 shadow-[0_1px_8px_rgba(0,0,0,0.03)]">
-        <div className="max-w-4xl mx-auto h-16 px-4 flex items-center justify-between gap-2">
+        <div className="max-w-7xl mx-auto h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
           {/* Zone 1: Brand & Status */}
           <div className="flex items-center gap-2.5 min-w-0">
             {/* SVG Logo icon matching authentic Blood-Connect droplet */}

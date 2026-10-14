@@ -31,6 +31,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ role, activeSubTab, onSele
     { id: 'eligibility', label: 'Self-Test', icon: 'health_and_safety' },
     { id: 'centers', label: 'Walk-In', icon: 'pin_drop' },
     { id: 'rewards', label: 'Rewards', icon: 'storefront' },
+    { id: 'leaderboard', label: 'Ranks', icon: 'leaderboard' },
     { id: 'bot', label: 'AI Bot', icon: 'smart_toy' },
   ];
 
@@ -39,7 +40,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ role, activeSubTab, onSele
 
   return (
     <nav className="fixed bottom-0 w-full z-40 bg-[#f8f9ff]/95 backdrop-blur-xl border-t border-slate-200/80 shadow-[0_-2px_12px_rgba(0,0,0,0.05)]">
-      <div className="max-w-md mx-auto flex items-center justify-around h-16 px-1">
+      <div className="max-w-5xl mx-auto flex items-center justify-around h-16 px-2 sm:px-6">
         {tabs.map((tab) => {
           const isActive = activeSubTab === tab.id;
           return (
@@ -53,12 +54,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({ role, activeSubTab, onSele
               }`}
             >
               <span
-                className="material-symbols-outlined text-[20px]"
+                className="material-symbols-outlined text-[20px] sm:text-[22px]"
                 style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
               >
                 {tab.icon}
               </span>
-              <span className="text-[9.5px] leading-none tracking-tight truncate max-w-[50px]">
+              <span className="text-[9.5px] sm:text-[11px] leading-none tracking-tight truncate max-w-[54px] sm:max-w-none">
                 {tab.label}
               </span>
             </button>

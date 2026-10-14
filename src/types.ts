@@ -54,6 +54,7 @@ export interface DonorProfile {
   livesSaved: number;
   referralCode: string;
   referralsCount: number;
+  streak?: number;
 }
 
 export interface DonationCamp {
@@ -156,5 +157,6 @@ export interface IntegratedDonor {
   lng?: number;
   distanceKm?: number;
   totalDonations?: number;
+  streak?: number;
 }
 

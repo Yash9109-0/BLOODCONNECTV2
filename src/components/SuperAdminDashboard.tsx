@@ -232,7 +232,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const verifiedCount = hospitalsList.filter((h) => h.verified).length;
 
   return (
-    <div className="flex flex-col w-full max-w-xl mx-auto px-4 py-4 pb-28 gap-4 font-sans">
+    <div className="flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28 gap-6 font-sans">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#0b1c30] text-white text-[13px] font-medium px-4 py-2.5 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
@@ -384,9 +384,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             </p>
           </div>
         ) : (
-          filteredList.map((item) => {
-            const isProcessing = actionInProgress === item.id;
-            return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredList.map((item) => {
+              const isProcessing = actionInProgress === item.id;
+              return (
               <div
                 key={item.id}
                 className={`bg-white rounded-2xl p-4 border transition-all shadow-xs flex flex-col gap-3 ${
@@ -510,7 +511,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </div>
               </div>
             );
-          })
+          })}
+        </div>
         )}
       </section>
     </div>

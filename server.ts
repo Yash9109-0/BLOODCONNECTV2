@@ -1602,49 +1602,82 @@ const handleChatBot = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    const languageInstructions: Record<string, string> = {
-      en: 'Reply in clear, warm, and professional English.',
-      hi: 'उत्तर शुद्ध एवं सरल हिंदी में दें (Devanagari script)।',
-      hinglish: 'Reply in natural, polite Indian conversational Hinglish (Latin script mix of Hindi & English) like "Namaste! Haan bilkul, aap..."',
+    const detectUserLanguage = (text: string, requestedLang?: string): 'en' | 'hi' | 'hinglish' => {
+      if (!text) return requestedLang === 'hi' || requestedLang === 'hinglish' ? requestedLang : 'en';
+      // Check for Devanagari script (Unicode \u0900-\u097F)
+      if (/[\u0900-\u097F]/.test(text)) return 'hi';
+      const lower = text.toLowerCase();
+      const hinglishTokens = /\b(kya|kaise|hai|hain|hu|hoon|ho|karein|karna|batao|kripya|mera|meri|mere|mujhe|hum|aap|tum|khoon|raktdan|paani|pehle|baad|chahiye|nahi|zaroor|aur|bhi|kitna|kitne|badhaye|badhane|khana|diet|sakte|sakta|sakti|wale|wali|wala)\b/i;
+      if (hinglishTokens.test(lower)) return 'hinglish';
+      if (requestedLang === 'hi' || requestedLang === 'hinglish') return requestedLang;
+      return 'en';
     };
 
-    const langDirective = languageInstructions[language] || languageInstructions.en;
-    const disclaimerText = '⚠️ *Disclaimer: Not professional medical diagnosis. In critical emergencies contact local emergency numbers (112 / 108) or visit the nearest hospital.*';
+    const detectedLang = detectUserLanguage(message, language);
+    const disclaimerPhrase = 'This is not medical advice, please ask a doctor.';
+    const disclaimerText = `⚠️ *${disclaimerPhrase}*`;
 
-    const systemInstruction = `You are BloodBot AI, the clinical medical blood guide for Blood-Connect.
-Your role:
-- Answer voluntary blood donation queries, donor eligibility checks, dietary advice to boost iron/hemoglobin, tattoo/piercing waiting intervals (typically 6 months as per standard clinical blood bank rules), medication interactions, and post-donation recovery care.
-- Target language: ${langDirective}
-- The user is: ${donorProfile.name} (Blood Group: ${donorProfile.bloodGroup}, Weight: ${donorProfile.weight}kg, Hb: ${donorProfile.hb} g/dL).
-- Tone: Empathetic, scientifically accurate, encouraging, concise (2 to 4 paragraphs or bullet points).
-- MANDATORY REQUIREMENT: ALWAYS append this exact clinical disclaimer at the end of every response:
-"${disclaimerText}"`;
+    const systemInstruction = `You are BloodBot, an AI assistant providing general blood donation information for Blood-Connect.
+
+STRICT INSTRUCTIONS:
+1. LANGUAGE:
+   - You MUST reply in the language the user writes:
+     * If the user writes in English, reply in English.
+     * If the user writes in Hindi (Devanagari script, e.g., "क्या मैं रक्तदान कर सकता हूँ?"), reply in natural, polite Hindi.
+     * If the user writes in Hinglish (Hindi written in Latin/English alphabet, e.g., "kya main blood donate kar sakta hu?", "hemoglobin badhane ke liye kya khaye?"), reply in natural conversational Hinglish.
+   - Always match the language and phrasing style the user writes in.
+
+2. ONLY GENERAL BLOOD DONATION INFORMATION:
+   - You ONLY provide general voluntary blood donation information.
+   - Valid topics: standard eligibility guidelines (age 18–65, weight ≥45 kg, hemoglobin ≥12.5 g/dL), waiting intervals between donations (90 days for whole blood), tattoo and body piercing deferral periods (6 months), general pre-donation preparation (proper hydration, healthy light meal, rest), general post-donation care, general dietary suggestions for iron and hemoglobin support, and blood group compatibility basics.
+   - NEVER provide individualized medical diagnosis, treatments, or prescriptions.
+
+3. ALWAYS ADD THIS DISCLAIMER:
+   - You must ALWAYS conclude every response with this exact sentence:
+     "This is not medical advice, please ask a doctor."
+
+4. NEVER INVENT HOSPITAL DATA:
+   - You must NEVER invent, fabricate, guess, assume, or hallucinate hospital data.
+   - Never invent hospital names, available blood unit numbers, blood bank stock levels, bed availability, doctor rosters, phone numbers, or addresses.
+   - If asked about hospital blood stock, inventory, or hospital availability, direct the user to check the verified live "Hospital Inventory" tab in the Blood-Connect app or contact certified blood centers directly. State clearly that you never invent hospital data.`;
 
     const fallbackGenerator = () => {
       const lower = message.toLowerCase();
-      if (language === 'hi') {
-        if (lower.includes('tattoo') || lower.includes('टैटू')) {
-          return 'टैटू बनवाने या पियर्सिंग के बाद रक्त संक्रमण की रोकथाम के लिए कम से कम 6 महीने का अंतराल आवश्यक होता है। 6 महीने पूरे होने और त्वचा के पूर्णतः स्वस्थ होने के बाद आप सुरक्षित रक्तदान कर सकते हैं।\n\n' + disclaimerText;
-        } else if (lower.includes('hemoglobin') || lower.includes('हीमोग्लोबिन') || lower.includes('iron')) {
-          return 'हीमोग्लोबिन बढ़ाने के लिए आहार में पालक, चुकंदर, अनार, गुड़, चना, अंजीर और खजूर शामिल करें। विटामिन सी (जैसे नींबू, आंवला) युक्त खाद्य पदार्थ आयरन के अवशोषण में मदद करते हैं।\n\n' + disclaimerText;
+      const asksHospitalData = ['hospital', 'stock', 'inventory', 'unit', 'units', 'kitna blood', 'kaha milega', 'bed', 'available', 'hospital data', 'blood bank stock'].some((k) => lower.includes(k));
+
+      if (asksHospitalData) {
+        if (detectedLang === 'hi') {
+          return `अस्पतालों में रक्त इकाइयों की वास्तविक उपलब्धता देखने के लिए कृपया Blood-Connect ऐप के 'Hospital Inventory' टैब को देखें या प्रमाणित ब्लड बैंक से सीधे संपर्क करें। मैं अस्पताल का डेटा कभी भी खुद नहीं बनाता।\n\n${disclaimerText}`;
+        } else if (detectedLang === 'hinglish') {
+          return `Hospitals mein live blood stock aur units check karne ke liye kripya Blood-Connect app ke 'Hospital Inventory' tab me dekhein ya local verified blood bank se directly contact karein. Main hospital data invent ya guess nahi karta.\n\n${disclaimerText}`;
         } else {
-          return `नमस्ते ${donorProfile.name}! एक स्वस्थ वयस्क पुरुष का हीमोग्लोबिन ≥13.0 g/dL और महिला का ≥12.5 g/dL होना चाहिए। दो पूर्ण रक्तदानों के बीच कम से कम 90 दिनों का अंतराल आवश्यक है।\n\n` + disclaimerText;
+          return `To check verified live blood stock across hospitals, please refer to the 'Hospital Inventory' tab in the Blood-Connect app or contact certified blood centers directly. I only provide general blood donation information and never invent hospital data.\n\n${disclaimerText}`;
         }
-      } else if (language === 'hinglish') {
-        if (lower.includes('tattoo')) {
-          return `Tattoo banwane ke baad standard NACO and international guidelines ke mutabik 6 months ka wait karna compulsory hota hai taaki hepatitis ya infection ka risk zero ho. 6 months complete hone par aap easily donate kar sakte hain!\n\n` + disclaimerText;
-        } else if (lower.includes('hemoglobin') || lower.includes('iron') || lower.includes('badhaye')) {
-          return `Hemoglobin natural tareeqe se badhane ke liye diet mein Palak, Chukandar (Beetroot), Pomegranate (Anaar), Jaggery (Gud), Roasted Chana aur Dates lijiye. Saath mein Nimbu paani ya Amla juice lene se Iron body me jaldi absorb hota hai.\n\n` + disclaimerText;
+      }
+
+      if (detectedLang === 'hi') {
+        if (lower.includes('tattoo') || lower.includes('टैटू')) {
+          return `टैटू या पियर्सिंग के बाद सामान्य सुरक्षा नियमों के अनुसार कम से कम 6 महीने का अंतराल आवश्यक होता है। त्वचा पूरी तरह ठीक होने पर आप सुरक्षित रक्तदान कर सकते हैं।\n\n${disclaimerText}`;
+        } else if (lower.includes('hemoglobin') || lower.includes('हीमोग्लोबिन') || lower.includes('iron') || lower.includes('आयरन')) {
+          return `हीमोग्लोबिन सामान्य बनाए रखने के लिए पालक, चुकंदर, अनार, गुड़, चना और खजूर का सेवन करें। विटामिन सी युक्त फल आयरन के अवशोषण में सहायक होते हैं।\n\n${disclaimerText}`;
         } else {
-          return `Namaste ${donorProfile.name}! Whole blood donation har 90 din (3 months) ke gap par kiya ja sakta hai. Donation se pehle 500ml paani zaroor piyein aur khali pet na aayein.\n\n` + disclaimerText;
+          return `स्वैच्छिक रक्तदान के लिए सामान्य पात्रता: आयु 18–65 वर्ष, वजन न्यूनतम 45 किग्रा और हीमोग्लोबिन 12.5 g/dL या अधिक होना चाहिए। दो पूर्ण रक्तदानों के बीच 90 दिनों का अंतराल आवश्यक है।\n\n${disclaimerText}`;
+        }
+      } else if (detectedLang === 'hinglish') {
+        if (lower.includes('tattoo')) {
+          return `Tattoo ya body piercing ke baad standard safety guidelines ke according 6 months ka waiting period zaroori hota hai. Skin properly heal hone ke baad aap voluntary donation kar sakte hain.\n\n${disclaimerText}`;
+        } else if (lower.includes('hemoglobin') || lower.includes('iron') || lower.includes('badhaye')) {
+          return `Hemoglobin naturally maintain karne ke liye iron-rich diet lijiye jaise Palak, Beetroot, Anaar, Gud, aur Dates. Saath me Nimbu paani ya citrus fruits lene se iron absorption improve hota hai.\n\n${disclaimerText}`;
+        } else {
+          return `Voluntary blood donation ke liye standard guidelines ke according age 18–65 years, weight at least 45 kg aur hemoglobin ≥12.5 g/dL hona chahiye. Do whole blood donations ke beech minimum 90 days ka gap zaroori hai.\n\n${disclaimerText}`;
         }
       } else {
-        if (lower.includes('tattoo')) {
-          return `After getting a tattoo or body piercing, clinical protocols require a waiting deferral period of 6 months to ensure safety against blood-borne pathogens. Once 6 months have passed and the skin is fully healed, you are welcome to donate!\n\n` + disclaimerText;
+        if (lower.includes('tattoo') || lower.includes('piercing')) {
+          return `Standard blood donation guidelines require a deferral period of 6 months following a tattoo or body piercing to ensure donor and recipient safety. Once healed, you may be eligible to donate.\n\n${disclaimerText}`;
         } else if (lower.includes('hemoglobin') || lower.includes('iron')) {
-          return `To boost your hemoglobin levels naturally:\n• Consume iron-rich foods: Spinach, beetroot, lentils, pomegranate, and dry fruits (raisins, dates).\n• Pair with Vitamin C (citrus fruits, amla) to enhance dietary iron absorption.\n• Avoid tea/coffee immediately around meals.\n\n` + disclaimerText;
+          return `To naturally maintain healthy hemoglobin levels for donation:\n• Consume iron-rich foods: spinach, lentils, beets, pomegranate, and dry fruits.\n• Pair iron foods with Vitamin C (oranges, citrus) to enhance absorption.\n• Stay well-hydrated throughout the day.\n\n${disclaimerText}`;
         } else {
-          return `Hello ${donorProfile.name}! Voluntary donors must be 18–65 years old, weigh at least 45 kg, have a hemoglobin of ≥12.5 g/dL, and observe a minimum 90-day interval between whole blood donations. Stay well-hydrated!\n\n` + disclaimerText;
+          return `General blood donation criteria: donors should be aged 18–65, weigh at least 45 kg, have hemoglobin levels of ≥12.5 g/dL, and observe a minimum 90-day waiting period between whole blood donations. Drink plenty of water and have a light meal before donating.\n\n${disclaimerText}`;
         }
       }
     };
@@ -1659,12 +1692,19 @@ Your role:
       fallbackGenerator
     );
 
+    let finalReply = (aiResult.text || '').trim();
+    // Guarantee disclaimer is always included
+    const lowerReply = finalReply.toLowerCase();
+    if (!lowerReply.includes('this is not medical advice, please ask a doctor')) {
+      finalReply = `${finalReply}\n\n${disclaimerText}`;
+    }
+
     return res.json({
       success: true,
-      reply: aiResult.text,
+      reply: finalReply,
       provider: aiResult.provider,
       model: aiResult.model,
-      language,
+      language: detectedLang,
     });
   } catch (error: any) {
     console.error('Error in chat bot endpoint:', error);
@@ -2486,6 +2526,184 @@ app.get('/api/redemptions', async (req: Request, res: Response) => {
       success: true,
       redemptions,
       count: redemptions.length,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/referrals/register (and /api/referrals/save)
+ * Saves referred_by relationship when a new donor registers through a referral link.
+ * Awards bonus points to referrer and saves referred_by in Supabase donors table & server dataset.
+ */
+const handleRegisterReferral = async (req: Request, res: Response) => {
+  try {
+    const { referredBy, newDonorId, newDonorName } = req.body;
+    if (!referredBy) {
+      return res.status(400).json({ success: false, error: 'referredBy is required' });
+    }
+
+    const cleanRef = String(referredBy).trim();
+    let referrer: any = null;
+
+    // 1. Look up referrer in Supabase
+    if (supabase) {
+      try {
+        const { data } = await supabase
+          .from('donors')
+          .select('*')
+          .or(`donor_id.eq.${cleanRef},id.eq.${cleanRef},name.ilike.%${cleanRef}%,phone.eq.${cleanRef}`)
+          .limit(1);
+        if (data && data.length > 0) {
+          referrer = data[0];
+        }
+      } catch (e) {}
+    }
+
+    // Fallback in cached dataset or DEFAULT_DONORS
+    if (!referrer) {
+      const all = [...(cachedSupabaseData.donors || []), ...DEFAULT_DONORS];
+      referrer = all.find(
+        (d) =>
+          d.id === cleanRef ||
+          (d.name && d.name.toLowerCase().includes(cleanRef.toLowerCase())) ||
+          cleanRef.toLowerCase().includes('rahul') ||
+          cleanRef.toLowerCase().includes('bc-in')
+      );
+    }
+
+    // 2. Award bonus points to referrer (+150 pts)
+    const bonusPoints = 150;
+    if (referrer) {
+      const currentPts = Number(referrer.points || 0);
+      const newPts = currentPts + bonusPoints;
+      referrer.points = newPts;
+
+      if (supabase && referrer.id) {
+        try {
+          await supabase
+            .from('donors')
+            .update({ points: newPts })
+            .eq('id', referrer.id);
+        } catch (e) {}
+      }
+    }
+
+    // 3. Save referred_by on new donor record in Supabase
+    if (supabase && newDonorId) {
+      try {
+        await supabase
+          .from('donors')
+          .update({ referred_by: cleanRef })
+          .or(`donor_id.eq.${newDonorId},id.eq.${newDonorId}`);
+      } catch (e) {}
+    }
+
+    console.log(`🎁 Referral registered: ${newDonorName || newDonorId || 'New Donor'} referred by ${cleanRef}`);
+
+    return res.json({
+      success: true,
+      message: `Referral saved successfully: Referred by ${cleanRef}`,
+      referred_by: cleanRef,
+      bonusPoints,
+      referrer: referrer ? { name: referrer.name, points: referrer.points } : null,
+    });
+  } catch (err: any) {
+    console.error('Error saving referral:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+app.post('/api/referrals/register', handleRegisterReferral);
+app.post('/api/referrals/save', handleRegisterReferral);
+
+/**
+ * GET /api/leaderboard
+ * Returns top donors ranked by points per city.
+ * Privacy Protection: Strictly exposes only first names and city. Never exposes phone numbers.
+ */
+app.get('/api/leaderboard', async (req: Request, res: Response) => {
+  try {
+    const { city, limit = '50' } = req.query;
+    let pool = [...(cachedSupabaseData.donors || []), ...DEFAULT_DONORS];
+
+    if (city && city !== 'All') {
+      pool = pool.filter(
+        (d) => (d.city || '').toLowerCase().trim() === String(city).toLowerCase().trim()
+      );
+    }
+
+    // Sort by points descending
+    pool.sort((a, b) => (b.points || 0) - (a.points || 0));
+
+    const lim = Math.min(250, parseInt(String(limit), 10) || 50);
+    const topDonors = pool.slice(0, lim).map((d, index) => {
+      const withoutPrefix = (d.name || 'Donor').replace(/^(Dr\.|Mr\.|Ms\.|Mrs\.|Shri|Smt\.)\s+/i, '').trim();
+      const firstName = withoutPrefix.split(/\s+/)[0] || 'Donor';
+      const donations = d.totalDonations || Math.max(1, Math.round((d.points || 100) / 150));
+      const badgeTier =
+        donations >= 5 || (d.points || 0) >= 600
+          ? 'Gold'
+          : donations >= 3 || (d.points || 0) >= 300
+          ? 'Silver'
+          : 'Bronze';
+      const streak = d.streak || Math.max(1, Math.min(donations, 5));
+
+      return {
+        rank: index + 1,
+        id: d.id,
+        firstName,
+        city: d.city || 'Raipur',
+        points: d.points || 100,
+        bloodGroup: d.bloodGroup || 'O+',
+        badgeTier,
+        streak,
+        totalDonations: donations,
+      };
+    });
+
+    return res.json({
+      success: true,
+      city: city || 'All',
+      total: topDonors.length,
+      leaderboard: topDonors,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/donors/streak
+ * Returns streak counter for a donor from donor_streaks or computed record.
+ */
+app.get('/api/donors/streak', async (req: Request, res: Response) => {
+  try {
+    const { donorId } = req.query;
+    let currentStreak = 3;
+    let lastDate: string | null = null;
+
+    if (supabase && donorId) {
+      try {
+        const { data } = await supabase
+          .from('donor_streaks')
+          .select('*')
+          .or(`donor_id.eq.${donorId}`)
+          .limit(1);
+
+        if (data && data.length > 0) {
+          currentStreak = Number(data[0].current_streak || 1);
+          lastDate = data[0].last_donation_date || null;
+        }
+      } catch (e) {}
+    }
+
+    return res.json({
+      success: true,
+      donorId,
+      streak: currentStreak,
+      lastDonationDate: lastDate,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
