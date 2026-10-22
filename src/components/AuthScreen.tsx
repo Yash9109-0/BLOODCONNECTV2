@@ -74,6 +74,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [hotline, setHotline] = useState('');
   const [authError, setAuthError] = useState<string | null>(() => readOAuthRedirectError());
   const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
+  
 
   // Referred by code captured from referral invite link (?ref=... or localStorage)
   const [referredBy, setReferredBy] = useState<string>(() => {
@@ -230,10 +231,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       return;
     }
 
-    // Google -> Supabase Auth OAuth (provider must be enabled in the dashboard)
+    // Official Google OAuth via Supabase
     setIsGoogleRedirecting(true);
-    // Remember the chosen role for first-time Google sign-ups
     localStorage.setItem('bc_pending_role', activeRole);
+    localStorage.removeItem('bc_demo_user');
+
     const result = await signInWithGoogle();
     if (!result.success) {
       setAuthError(result.error);
@@ -958,6 +960,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       </div>
         </div>
       </div>
-    </div>
+
+      </div>
   );
 };

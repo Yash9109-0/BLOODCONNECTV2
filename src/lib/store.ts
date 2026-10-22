@@ -500,11 +500,11 @@ export function useBloodConnectStore() {
       }
     })();
 
-    const unsubscribe = subscribeToAuthChanges((nextSession) => {
+    const unsubscribe = subscribeToAuthChanges((event, nextSession) => {
       if (!mounted) return;
       if (nextSession?.user) {
         applyAuthUser(nextSession.user);
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setSession({ isAuthenticated: false, role: null });
         localStorage.removeItem('bc_session');
       }

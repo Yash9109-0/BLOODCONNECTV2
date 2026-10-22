@@ -417,11 +417,20 @@ export async function signInWithGoogle(): Promise<AuthResult> {
       // Preflight is best-effort — proceed with the redirect if it fails
     }
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/` },
+      options: {
+        redirectTo: `${(typeof window !== "undefined" ? window.location.origin : "").replace(/\/+$/, "")}/`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account',
+        },
+      },
     });
     if (error) return { success: false, error: readableAuthError(error.message) };
+    if (data?.url) {
+      window.location.href = data.url;
+    }
     return { success: true, message: 'Redirecting to Google for secure sign-in…' };
   } catch (e: any) {
     return {
@@ -467,10 +476,10 @@ export async function getInitialSession(): Promise<Session | null> {
 
 /** Subscribe to Supabase auth state changes; returns an unsubscribe function. */
 export function subscribeToAuthChanges(
-  callback: (session: Session | null) => void
+  callback: (event: string, session: Session | null) => void
 ): () => void {
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    callback(session);
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    callback(event, session);
   });
   return () => data.subscription.unsubscribe();
 }
