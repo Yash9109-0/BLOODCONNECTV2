@@ -39,7 +39,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ role, activeSubTab, onSele
     role === 'super_admin' ? superAdminTabs : role === 'hospital' ? hospitalTabs : donorTabs;
 
   return (
-    <nav className="fixed bottom-0 w-full z-40 bg-[#f8f9ff]/95 backdrop-blur-xl border-t border-slate-200/80 shadow-[0_-2px_12px_rgba(0,0,0,0.05)]">
+    <nav className="fixed bottom-0 left-0 right-0 w-full z-40 bg-[#f8f9ff]/95 backdrop-blur-xl border-t border-slate-200/80 shadow-[0_-2px_12px_rgba(0,0,0,0.05)] pb-[env(safe-area-inset-bottom,0px)]">
       <div className="max-w-5xl mx-auto flex items-center justify-around h-16 px-2 sm:px-6">
         {tabs.map((tab) => {
           const isActive = activeSubTab === tab.id;

@@ -232,7 +232,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const verifiedCount = hospitalsList.filter((h) => h.verified).length;
 
   return (
-    <div className="flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28 gap-6 font-sans">
+    <div className="flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-32 sm:pb-36 gap-6 font-sans">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#0b1c30] text-white text-[13px] font-medium px-4 py-2.5 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">

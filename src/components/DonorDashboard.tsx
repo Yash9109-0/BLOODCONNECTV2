@@ -1290,7 +1290,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
   }
 
   return (
-    <div className="flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 gap-6">
+    <div className="flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-32 sm:pb-36 gap-6">
       {/* PAGE 1: E-PASS & PROFILE */}
       {currentPage === 'pass' && (
         <div className="flex flex-col gap-5">

@@ -89,7 +89,7 @@ export default function App() {
       />
 
       {/* Main Viewport Container */}
-      <main className="flex-1 w-full pt-16">
+      <main className="flex-1 w-full pt-16 pb-16 sm:pb-20">
         {/* PAGE 1: Unauthenticated Login / Register Screen (No dashboard visible) */}
         {!session.isAuthenticated && (
           <AuthScreen

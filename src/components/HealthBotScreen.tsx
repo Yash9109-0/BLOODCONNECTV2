@@ -137,7 +137,7 @@ export const HealthBotScreen: React.FC<HealthBotScreenProps> = ({ donor }) => {
   };
 
   return (
-    <div className="flex flex-col w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 gap-4">
+    <div className="flex flex-col w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-32 sm:pb-36 gap-4">
       {/* Header Bar */}
       <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col gap-3">
         <div className="flex items-center justify-between">
