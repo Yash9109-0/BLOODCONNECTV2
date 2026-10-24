@@ -37,6 +37,8 @@ export default function App() {
     deleteCamp,
     requests,
     addEmergencyRequest,
+    dispatchEmergencyRequest,
+    fulfillEmergencyRequest,
     crossHospitalStock,
     liveBloodBanks,
     liveDonors,
@@ -49,7 +51,7 @@ export default function App() {
 
   const handleLoginSuccess = (
     role: UserRole,
-    details?: { email?: string; name?: string; facilityName?: string }
+    details?: { email?: string; name?: string; facilityName?: string; verified?: boolean }
   ) => {
     loginAs(role, details);
   };
@@ -89,7 +91,7 @@ export default function App() {
       />
 
       {/* Main Viewport Container */}
-      <main className="flex-1 w-full pt-16 pb-16 sm:pb-20">
+      <main className="flex-1 w-full pt-16 pb-28 sm:pb-36">
         {/* PAGE 1: Unauthenticated Login / Register Screen (No dashboard visible) */}
         {!session.isAuthenticated && (
           <AuthScreen
@@ -114,6 +116,8 @@ export default function App() {
             onDeleteCamp={deleteCamp}
             requests={requests}
             onAddRequest={addEmergencyRequest}
+            onDispatchEmergencyRequest={dispatchEmergencyRequest}
+            onFulfillEmergencyRequest={fulfillEmergencyRequest}
             crossHospitalStock={crossHospitalStock}
             liveBloodBanks={liveBloodBanks}
             liveDonors={liveDonors}
@@ -135,6 +139,7 @@ export default function App() {
             onAwardReferralPoints={awardReferralPoints}
             camps={camps}
             requests={requests}
+            onDispatchEmergencyRequest={dispatchEmergencyRequest}
             onNavigateToChat={() => handleSubTabSelect('bot')}
             liveBloodBanks={liveBloodBanks}
             liveDonors={liveDonors}

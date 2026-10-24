@@ -39,13 +39,39 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     }, 3200);
   };
 
-  // Fetch hospitals from Supabase public.hospitals table, supplemented with unverified blood bank mocks
+  // Fetch hospitals from both backend approval registry and Supabase public.hospitals table
   const fetchHospitals = async () => {
     setIsLoading(true);
     try {
-      const items: UnverifiedHospitalItem[] = [];
+      const itemsMap = new Map<string, UnverifiedHospitalItem>();
 
-      // 1. Try reading from public.hospitals table
+      // 1. Try fetching from server-side hospital registry endpoint
+      try {
+        const resp = await fetch('/api/hospitals/pending');
+        if (resp.ok) {
+          const body = await resp.json();
+          if (body.success && Array.isArray(body.hospitals)) {
+            body.hospitals.forEach((h: any) => {
+              const id = h.id || h.name;
+              itemsMap.set(id.toLowerCase(), {
+                id,
+                name: h.name || 'Unnamed Hospital',
+                licenseNumber: h.licenseNumber || 'PENDING-VERIFY',
+                city: h.city || 'Raipur',
+                address: h.address || 'Chhattisgarh',
+                contactNumber: h.contactNumber || h.phone || 'N/A',
+                verified: !!h.verified,
+                createdAt: h.createdAt || 'Recently registered',
+                source: h.source || 'server',
+              });
+            });
+          }
+        }
+      } catch (apiErr) {
+        console.warn('API /api/hospitals/pending fetch note:', apiErr);
+      }
+
+      // 2. Also try reading from public.hospitals table via Supabase client
       try {
         const { data, error } = await supabase
           .from('hospitals')
@@ -58,16 +84,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               h.is_verified === true ||
               h.verified === true ||
               h.status === 'verified';
+            const id = h.id || h.user_id || h.name;
 
-            items.push({
-              id: h.id || h.user_id,
+            itemsMap.set(id.toLowerCase(), {
+              id,
               name: h.name || 'Unnamed Hospital',
               licenseNumber: h.license_number || 'PENDING-VERIFY',
               city: h.city || 'Raipur',
               address: h.address || 'Chhattisgarh',
               contactNumber: h.contact_number || h.phone || 'N/A',
               verified: isVerified,
-              createdAt: h.created_at,
+              createdAt: h.created_at || 'Database Record',
               source: 'database',
             });
           });
@@ -76,8 +103,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         console.warn('Supabase hospitals query note:', dbErr);
       }
 
-      // 2. If table is empty or missing rows, provide realistic sample pending hospitals for SuperAdmin
-      if (items.length === 0) {
+      // 3. If list is completely empty, provide realistic sample pending hospitals for SuperAdmin
+      if (itemsMap.size === 0) {
         const mockPending: UnverifiedHospitalItem[] = [
           {
             id: 'hosp-pending-1',
@@ -140,7 +167,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         return;
       }
 
-      setHospitalsList(items);
+      setHospitalsList(Array.from(itemsMap.values()));
     } catch (err) {
       console.warn('Error fetching unverified hospitals:', err);
     } finally {
@@ -148,14 +175,89 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     }
   };
 
+  const [realtimeConnected, setRealtimeConnected] = useState<boolean>(true);
+  const [realtimeEventMsg, setRealtimeEventMsg] = useState<string>('Listening on Supabase WebSockets (0ms)');
+
   useEffect(() => {
     fetchHospitals();
+
+    // 1. Production Supabase Realtime Channel (100% Free Tier WebSockets on table 'hospitals')
+    const hospitalChannel = supabase
+      .channel('public:hospitals:realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'hospitals' },
+        (payload: any) => {
+          const action = payload.eventType === 'INSERT' ? 'New Registration' : payload.eventType === 'UPDATE' ? 'Updated' : 'Deleted';
+          setRealtimeEventMsg(`Postgres change: ${action} (${new Date().toLocaleTimeString()})`);
+          showToast(`⚡ Supabase Realtime: Facility ${action} detected!`);
+          fetchHospitals();
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeConnected(true);
+        }
+      });
+
+    // 2. Server-Sent Events (SSE) Stream Fallback (Zero cost instant server push)
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/realtime/stream');
+      eventSource.onopen = () => setRealtimeConnected(true);
+      eventSource.onmessage = (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type?.startsWith('hospital_')) {
+            const hName = data.data?.name || data.data?.hospitalId || 'Facility';
+            setRealtimeEventMsg(`Event: ${data.type} (${new Date().toLocaleTimeString()})`);
+            showToast(`🔔 Instant Sync: ${hName} (${data.type.replace('hospital_', '')})`);
+            fetchHospitals();
+          }
+        } catch {}
+      };
+    } catch (sseErr) {
+      console.warn('SSE stream listener note:', sseErr);
+    }
+
+    // 3. W3C Native BroadcastChannel (Zero-budget cross-tab 0ms sync)
+    let broadcast: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        broadcast = new BroadcastChannel('bc_realtime_hospitals');
+        broadcast.onmessage = (event: MessageEvent) => {
+          if (event.data?.type?.startsWith('hospital_')) {
+            setRealtimeEventMsg(`Cross-tab: ${event.data.type} (${new Date().toLocaleTimeString()})`);
+            showToast(`⚡ Instant Sync: Facility registration detected across tabs!`);
+            fetchHospitals();
+          }
+        };
+      } catch {}
+    }
+
+    return () => {
+      supabase.removeChannel(hospitalChannel);
+      if (eventSource) eventSource.close();
+      if (broadcast) broadcast.close();
+    };
   }, []);
 
   // Action: Approve hospital
   const handleApprove = async (hospitalItem: UnverifiedHospitalItem) => {
     setActionInProgress(hospitalItem.id);
     try {
+      // 1. Call server-side approve endpoint
+      try {
+        await fetch('/api/hospitals/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hospitalId: hospitalItem.id }),
+        });
+      } catch (apiErr) {
+        console.warn('API approve note:', apiErr);
+      }
+
+      // 2. Also try updating Supabase directly
       if (hospitalItem.source === 'database') {
         const { error } = await supabase
           .from('hospitals')
@@ -191,6 +293,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
     setActionInProgress(hospitalItem.id);
     try {
+      // 1. Call server-side reject endpoint
+      try {
+        await fetch('/api/hospitals/reject', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hospitalId: hospitalItem.id }),
+        });
+      } catch (apiErr) {
+        console.warn('API reject note:', apiErr);
+      }
+
+      // 2. Also update Supabase
       if (hospitalItem.source === 'database') {
         await supabase
           .from('hospitals')
@@ -255,6 +369,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </h1>
                 <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-bold border border-indigo-400/30">
                   State Authority
+                </span>
+                <span
+                  className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 cursor-pointer"
+                  title={realtimeEventMsg}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                  <span>Supabase Realtime (0ms)</span>
                 </span>
               </div>
               <p className="text-[12px] text-slate-300">

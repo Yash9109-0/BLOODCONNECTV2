@@ -140,6 +140,7 @@ interface DonorDashboardProps {
   onAwardReferralPoints: () => void;
   camps: DonationCamp[];
   requests?: EmergencyRequest[];
+  onDispatchEmergencyRequest?: (requestId: string, details?: any) => void;
   onNavigateToChat: () => void;
   liveBloodBanks?: IntegratedBloodBank[];
   liveDonors?: IntegratedDonor[];
@@ -156,6 +157,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
   onAwardReferralPoints,
   camps,
   requests = [],
+  onDispatchEmergencyRequest,
   onNavigateToChat,
   liveBloodBanks = [],
   liveDonors = [],
@@ -737,6 +739,12 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({
           origin: { y: 0.8 },
         });
         showToast(`❤️ Pledge registered for ${req.hospitalName}! Status: Pending.`);
+        if (onDispatchEmergencyRequest) {
+          onDispatchEmergencyRequest(req.id, {
+            etaMinutes: 20,
+            dispatchedBy: `Voluntary Donor: ${donor.name} (${donor.bloodGroup})`,
+          });
+        }
       } else {
         throw new Error(data.error || 'Failed to register donation pledge on server');
       }

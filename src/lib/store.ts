@@ -466,6 +466,7 @@ export function useBloodConnectStore() {
         const { data } = await supabase.from('hospitals').select('*').eq('user_id', user.id).limit(1);
         const row = data && data[0];
         if (row) {
+          const isRowVerified = row.verified === true || row.is_verified === true;
           setHospital((prev) => ({
             ...prev,
             id: row.id,
@@ -474,9 +475,21 @@ export function useBloodConnectStore() {
             city: row.city || prev.city,
             address: row.address || prev.address,
             contactNumber: row.contact_number || prev.contactNumber,
-            verified: row.verified ?? prev.verified,
+            verified: isRowVerified,
             zoneHub: row.zone_hub || prev.zoneHub,
           }));
+        } else {
+          // Check verification status from backend registry
+          const checkKey = user.email || user.id;
+          if (checkKey) {
+            try {
+              const res = await fetch(`/api/hospitals/status/${encodeURIComponent(checkKey)}`);
+              const stat = await res.json();
+              if (stat?.verified !== undefined) {
+                setHospital((prev) => ({ ...prev, verified: !!stat.verified }));
+              }
+            } catch {}
+          }
         }
       }
     } catch (e) {
@@ -661,6 +674,45 @@ export function useBloodConnectStore() {
     return created;
   };
 
+  const dispatchEmergencyRequest = (
+    requestId: string,
+    details?: { courierOrVehicle?: string; etaMinutes?: number; dispatchedBy?: string }
+  ) => {
+    setRequests((prev) => {
+      const updated = prev.map((r) =>
+        r.id === requestId
+          ? {
+              ...r,
+              status: 'Dispatched' as const,
+              dispatchedAt: 'Just now',
+              dispatchedEtaMinutes: details?.etaMinutes || 14,
+              dispatchedBy: details?.dispatchedBy || hospital.name,
+            }
+          : r
+      );
+      try {
+        localStorage.setItem('bc_requests', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const fulfillEmergencyRequest = (requestId: string) => {
+    setRequests((prev) => {
+      const updated = prev.map((r) =>
+        r.id === requestId ? { ...r, status: 'Fulfilled' as const } : r
+      );
+      try {
+        localStorage.setItem('bc_requests', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setHospital((prev) => ({
+      ...prev,
+      pendingRequests: Math.max(0, prev.pendingRequests - 1),
+    }));
+  };
+
   const awardReferralPoints = () => {
     setDonor((prev) => ({
       ...prev,
@@ -749,7 +801,7 @@ export function useBloodConnectStore() {
   // Sign In action with role-specific credentials and routing
   const loginAs = (
     role: UserRole,
-    details?: { email?: string; name?: string; facilityName?: string }
+    details?: { email?: string; name?: string; facilityName?: string; verified?: boolean }
   ) => {
     const newSession: AuthSession = {
       isAuthenticated: true,
@@ -779,6 +831,28 @@ export function useBloodConnectStore() {
     setActiveSubTab(role === 'super_admin' ? 'approvals' : role === 'hospital' ? 'inventory' : 'pass');
     localStorage.setItem('bc_session', JSON.stringify(newSession));
     localStorage.setItem('bc_user_role', role);
+
+    if (role === 'hospital') {
+      const isDemo = (details?.email || newSession.userEmail) === 'coordinator@aiimsraipur.gov';
+      const isVerified = isDemo ? true : (details?.verified ?? false);
+      setHospital((prev) => ({
+        ...prev,
+        name: details?.facilityName || details?.name || prev.name,
+        verified: isVerified,
+      }));
+
+      const checkKey = details?.email || newSession.userEmail;
+      if (checkKey && !isDemo) {
+        fetch(`/api/hospitals/status/${encodeURIComponent(checkKey)}`)
+          .then((res) => res.json())
+          .then((stat) => {
+            if (stat?.verified !== undefined) {
+              setHospital((prev) => ({ ...prev, verified: !!stat.verified }));
+            }
+          })
+          .catch(() => {});
+      }
+    }
   };
 
   // Sign Out action - clears the local session AND the real Supabase Auth session
@@ -814,6 +888,8 @@ export function useBloodConnectStore() {
     deleteCamp,
     requests,
     addEmergencyRequest,
+    dispatchEmergencyRequest,
+    fulfillEmergencyRequest,
     crossHospitalStock,
     liveBloodBanks,
     liveDonors,

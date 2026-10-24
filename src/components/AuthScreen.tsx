@@ -8,7 +8,7 @@ interface AuthScreenProps {
   setActiveRole: (role: UserRole) => void;
   onLoginSuccess: (
     role: UserRole,
-    details?: { email?: string; name?: string; facilityName?: string }
+    details?: { email?: string; name?: string; facilityName?: string; verified?: boolean }
   ) => void;
 }
 
@@ -152,11 +152,34 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         }
         const user = result.user!;
         const role = getUserRole(user);
-        setAuthFeedback('Authenticated with Supabase Auth. Opening your dashboard...');
+
+        let hospitalVerified: boolean = false;
+        if (role === 'hospital') {
+          // Check verification status from server
+          try {
+            const statusResp = await fetch(`/api/hospitals/status/${encodeURIComponent(user.email || email.trim())}`);
+            if (statusResp.ok) {
+              const statusData = await statusResp.json();
+              hospitalVerified = !!statusData.verified;
+            } else {
+              hospitalVerified = user.user_metadata?.verified === true;
+            }
+          } catch {
+            hospitalVerified = user.user_metadata?.verified === true;
+          }
+        }
+
+        setAuthFeedback(
+          role === 'hospital' && !hospitalVerified
+            ? 'Authenticated! Note: Facility verification is pending Super Admin approval.'
+            : 'Authenticated with Supabase Auth. Opening your dashboard...'
+        );
+
         onLoginSuccess(role, {
           email: user.email || email.trim(),
           name: getUserDisplayName(user),
           facilityName: String((user.user_metadata as any)?.facility_name || ''),
+          verified: role === 'hospital' ? hospitalVerified : true,
         });
         return;
       }
@@ -204,16 +227,57 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         return;
       }
 
+      // If a hospital registered, forward approval request to server & Super Admin dashboard
+      if (activeRole === 'hospital') {
+        try {
+          await fetch('/api/hospitals/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: result.user?.id,
+              name: hospitalName.trim(),
+              licenseNumber: licenseNo.trim(),
+              city,
+              address: hospitalAddress.trim(),
+              contactNumber: hotline.trim(),
+              email: email.trim(),
+              category: 'Private',
+            }),
+          });
+        } catch (apiErr) {
+          console.warn('Hospital registration forwarding note:', apiErr);
+        }
+
+        // Zero-budget instant cross-tab notification for open Super Admin consoles
+        if (typeof BroadcastChannel !== 'undefined') {
+          try {
+            const bc = new BroadcastChannel('bc_realtime_hospitals');
+            bc.postMessage({ type: 'hospital_registered', name: hospitalName.trim() });
+            bc.close();
+          } catch {}
+        }
+      }
+
       if (result.needsConfirmation) {
-        setAuthFeedback(result.message);
+        setAuthFeedback(
+          activeRole === 'hospital'
+            ? `Registration submitted for "${hospitalName.trim()}"! Please confirm your email, then sign in. Verification request has also been forwarded to the Super Admin Dashboard.`
+            : result.message
+        );
         return;
       }
 
-      setAuthFeedback(result.message);
+      setAuthFeedback(
+        activeRole === 'hospital'
+          ? `✅ Facility registered! Approval request forwarded to Super Admin Dashboard. Verification is required for emergency broadcast privileges.`
+          : result.message
+      );
+
       onLoginSuccess(activeRole, {
         email: email.trim(),
         name: displayName,
         facilityName: hospitalName.trim(),
+        verified: activeRole === 'hospital' ? false : true,
       });
     } finally {
       setIsAuthenticating(false);

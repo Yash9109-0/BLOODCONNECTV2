@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserRole } from '../types';
 
 interface HeaderProps {
@@ -31,6 +31,20 @@ export const Header: React.FC<HeaderProps> = ({
   donorPoints,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.navigator.onLine : true
+  );
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const getPortalLabel = () => {
     if (!isAuthenticated) return 'National Rapid Response';
@@ -65,9 +79,15 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-[#b70011]"></span>
                 </span>
               </div>
-              <span className="text-[11px] font-semibold text-[#b70011] tracking-wider uppercase truncate">
-                {getPortalLabel()}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-semibold text-[#b70011] tracking-wider uppercase truncate">
+                  {getPortalLabel()}
+                </span>
+                <span className="hidden md:inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                  <span>{isOnline ? 'NACO / e-RaktKosh Synced' : 'Offline Cache Active'}</span>
+                </span>
+              </div>
             </div>
           </div>
 

@@ -65,8 +65,12 @@ export const HospitalLocationsMap: React.FC<HospitalLocationsMapProps> = ({
       const contactNumber = b.contactNumber || reg?.contactNumber || '+91 771-2525602';
       const operatingHours =
         b.operatingHours || reg?.operatingHours || '24/7 Emergency Blood Bank';
+      const rating = typeof b.rating === 'number' ? b.rating : reg?.rating;
+      const totalReviews = typeof b.totalReviews === 'number' ? b.totalReviews : reg?.totalReviews;
+      const areaLocality = b.areaLocality || reg?.areaLocality;
+      const googleMapsLink = b.googleMapsLink || reg?.googleMapsLink || b.mapsUrl;
       const distanceKm = haversineKm(refLat, refLng, lat, lng);
-      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      const mapsUrl = googleMapsLink || `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 
       return {
         ...b,
@@ -78,6 +82,10 @@ export const HospitalLocationsMap: React.FC<HospitalLocationsMapProps> = ({
         operatingHours,
         distanceKm,
         mapsUrl,
+        googleMapsLink,
+        rating,
+        totalReviews,
+        areaLocality,
       };
     });
   }, [bloodBanks, refLat, refLng]);
@@ -95,6 +103,7 @@ export const HospitalLocationsMap: React.FC<HospitalLocationsMapProps> = ({
         !searchQuery ||
         b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b.areaLocality || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b.district || '').toLowerCase().includes(searchQuery.toLowerCase());
       return matchDist && matchSearch;
     });
@@ -235,19 +244,26 @@ export const HospitalLocationsMap: React.FC<HospitalLocationsMapProps> = ({
       const marker = L.marker([bank.lat, bank.lng], { icon: pinIcon }).addTo(layer);
 
       marker.bindPopup(`
-        <div style="font-family:Inter,sans-serif;min-width:190px;padding:2px;">
-          <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:2px;">${bank.name}</div>
-          <div style="font-size:11px;color:#475569;margin-bottom:4px;">${bank.address}</div>
+        <div style="font-family:Inter,sans-serif;min-width:210px;padding:3px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:2px;">
+            <div style="font-weight:700;font-size:13px;color:#0f172a;line-height:1.2;">${bank.name}</div>
+            ${typeof bank.rating === 'number' ? `<span style="font-size:10px;font-weight:800;color:#b45309;background:#fef3c7;padding:1px 5px;border-radius:4px;white-space:nowrap;border:1px solid #fde68a;">⭐ ${bank.rating.toFixed(1)}</span>` : ''}
+          </div>
+          ${bank.areaLocality ? `<div style="font-size:11px;font-weight:600;color:#0284c7;margin-bottom:2px;">📍 ${bank.areaLocality}</div>` : ''}
+          <div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.3;">${bank.address}</div>
           <div style="font-size:10px;font-family:monospace;color:#059669;margin-bottom:6px;">
-            📍 ${bank.lat.toFixed(4)}° N, ${bank.lng.toFixed(4)}° E • ${totalUnits} Units
+            ${bank.distanceKm != null ? `${bank.distanceKm} km away • ` : ''}${totalUnits} Units
+            ${bank.totalReviews ? ` • ${bank.totalReviews} reviews` : ''}
           </div>
           <div style="display:flex;gap:6px;">
             <a href="${bank.mapsUrl}" target="_blank" rel="noopener noreferrer" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:700;">
-              Google Maps ↗
+              Directions ↗
             </a>
-            <a href="tel:${bank.contactNumber}" style="background:#059669;color:#ffffff;text-decoration:none;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:700;">
-              Call ${bank.contactNumber}
-            </a>
+            ${bank.contactNumber && bank.contactNumber !== 'Not Listed' ? `
+              <a href="tel:${bank.contactNumber}" style="background:#059669;color:#ffffff;text-decoration:none;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:700;">
+                Call
+              </a>
+            ` : ''}
           </div>
         </div>
       `);
@@ -419,10 +435,20 @@ export const HospitalLocationsMap: React.FC<HospitalLocationsMapProps> = ({
         {selectedBank && (
           <div className="bg-slate-900/95 p-3 border-t border-slate-800 flex items-center justify-between gap-3 text-white">
             <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-display font-bold text-[12px] text-white truncate">
                   {selectedBank.name}
                 </span>
+                {selectedBank.areaLocality && (
+                  <span className="text-[10px] font-semibold text-sky-300 bg-sky-950/80 px-1.5 py-0.2 rounded border border-sky-700/50 flex-shrink-0">
+                    {selectedBank.areaLocality}
+                  </span>
+                )}
+                {typeof selectedBank.rating === 'number' && (
+                  <span className="text-[10px] font-bold text-amber-300 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-600/40 flex items-center gap-0.5 flex-shrink-0">
+                    ⭐ {selectedBank.rating.toFixed(1)} {selectedBank.totalReviews ? `(${selectedBank.totalReviews})` : ''}
+                  </span>
+                )}
                 <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-1.5 py-0.2 rounded border border-emerald-700/50 flex-shrink-0">
                   📍 {selectedBank.lat?.toFixed(4)}°N, {selectedBank.lng?.toFixed(4)}°E
                 </span>
@@ -442,13 +468,15 @@ export const HospitalLocationsMap: React.FC<HospitalLocationsMapProps> = ({
                 <span className="material-symbols-outlined text-[14px]">directions</span>
                 <span>Navigate</span>
               </a>
-              <a
-                href={`tel:${selectedBank.contactNumber}`}
-                className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors flex items-center justify-center"
-                title="Call Hospital"
-              >
-                <span className="material-symbols-outlined text-[15px]">call</span>
-              </a>
+              {selectedBank.contactNumber && selectedBank.contactNumber !== 'Not Listed' && (
+                <a
+                  href={`tel:${selectedBank.contactNumber}`}
+                  className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors flex items-center justify-center"
+                  title="Call Hospital"
+                >
+                  <span className="material-symbols-outlined text-[15px]">call</span>
+                </a>
+              )}
             </div>
           </div>
         )}
@@ -487,10 +515,22 @@ export const HospitalLocationsMap: React.FC<HospitalLocationsMapProps> = ({
                             ? 'bg-emerald-100 text-emerald-800'
                             : bank.category === 'Charitable'
                             ? 'bg-purple-100 text-purple-800'
+                            : bank.category === 'Hospital'
+                            ? 'bg-indigo-100 text-indigo-800'
                             : 'bg-amber-100 text-amber-800'
                         }`}
                       >
                         {bank.category}
+                      </span>
+                    )}
+                    {bank.areaLocality && (
+                      <span className="text-[9px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.2 rounded">
+                        {bank.areaLocality}
+                      </span>
+                    )}
+                    {typeof bank.rating === 'number' && (
+                      <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                        ⭐ {bank.rating.toFixed(1)} {bank.totalReviews ? `(${bank.totalReviews})` : ''}
                       </span>
                     )}
                     {bank.lat && bank.lng && (
@@ -517,14 +557,21 @@ export const HospitalLocationsMap: React.FC<HospitalLocationsMapProps> = ({
 
               {/* Action buttons */}
               <div className="flex items-center justify-between gap-2 pt-2 mt-2 border-t border-slate-200/60">
-                <a
-                  href={`tel:${bank.contactNumber}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-[14px]">call</span>
-                  <span>{bank.contactNumber}</span>
-                </a>
+                {bank.contactNumber && bank.contactNumber !== 'Not Listed' ? (
+                  <a
+                    href={`tel:${bank.contactNumber}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">call</span>
+                    <span>{bank.contactNumber}</span>
+                  </a>
+                ) : (
+                  <span className="text-[11px] text-slate-400 italic flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">phone_disabled</span>
+                    <span>Phone Not Listed</span>
+                  </span>
+                )}
 
                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                   <button

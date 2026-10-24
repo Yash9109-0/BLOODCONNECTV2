@@ -82,6 +82,38 @@ export const RegisterHospitalModal: React.FC<RegisterHospitalModalProps> = ({
         throw new Error(data.error || 'Failed to add hospital blood bank');
       }
 
+      // Also ensure hospital is submitted to pending approvals for Super Admin
+      try {
+        await fetch('/api/hospitals/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: data.bloodBank?.id,
+            name: name.trim(),
+            category,
+            licenseNumber: licenseNumber.trim(),
+            city,
+            district,
+            address: address.trim(),
+            contactNumber: contactNumber.trim(),
+            operatingHours,
+            lat,
+            lng,
+          }),
+        });
+      } catch (fwdErr) {
+        console.warn('Approval forwarding note:', fwdErr);
+      }
+
+      // Zero-budget instant cross-tab notification
+      if (typeof BroadcastChannel !== 'undefined') {
+        try {
+          const bc = new BroadcastChannel('bc_realtime_hospitals');
+          bc.postMessage({ type: 'hospital_registered', name: name.trim() });
+          bc.close();
+        } catch {}
+      }
+
       onHospitalRegistered(data.bloodBank);
       onClose();
     } catch (err: any) {

@@ -12,6 +12,33 @@ export interface AuthSession {
 
 export type BloodGroup = 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
 
+export type BloodComponent = 'all' | 'prbc' | 'platelets' | 'ffp' | 'whole_blood' | 'cryo';
+
+export interface ColdChainUnit {
+  id: string;
+  name: string;
+  type: 'refrigerator' | 'agitator' | 'freezer' | 'transit_box';
+  tempCelsius: number;
+  targetMin: number;
+  targetMax: number;
+  status: 'optimal' | 'warning' | 'critical';
+  rpm?: number;
+  location: string;
+  lastCalibrated: string;
+}
+
+export interface CrossMatchResult {
+  compatible: boolean;
+  donorGroup: BloodGroup;
+  recipientGroup: BloodGroup;
+  component: string;
+  summary: string;
+  immunologyDetails: string;
+  timestamp: string;
+  verifiedBy?: string;
+  clearanceCode?: string;
+}
+
 export type UrgencyLevel = 'Routine' | 'Urgent' | 'CRITICAL (Golden Hour)';
 
 export interface BloodStockItem {
@@ -82,7 +109,10 @@ export interface EmergencyRequest {
   contactNumber: string;
   formattedMessage: string;
   createdAt: string;
-  status: 'Open' | 'Fulfilled';
+  status: 'Open' | 'Dispatched' | 'Fulfilled';
+  dispatchedAt?: string;
+  dispatchedEtaMinutes?: number;
+  dispatchedBy?: string;
 }
 
 export interface RewardVoucher {
@@ -118,7 +148,7 @@ export interface CrossHospitalStock {
 export interface IntegratedBloodBank {
   id: string;
   name: string;
-  category?: 'Govt' | 'Private' | 'Charitable' | string;
+  category?: 'Govt' | 'Private' | 'Charitable' | 'Hospital' | string;
   licenseNumber: string;
   city: string;
   district?: string;
@@ -130,8 +160,12 @@ export interface IntegratedBloodBank {
   lat?: number;
   lng?: number;
   mapsUrl?: string;
+  googleMapsLink?: string;
   operatingHours?: string;
   emergencyHotline?: string;
+  rating?: number;
+  totalReviews?: number;
+  areaLocality?: string;
   stock?: Partial<Record<BloodGroup, number>>;
 }
 
